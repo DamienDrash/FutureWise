@@ -3,11 +3,13 @@
   export let data
   let token = ''
   let tenantId = ''
+  const API = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
   onMount(() => {
     token = localStorage.getItem('fw_token') || ''
     tenantId = localStorage.getItem('fw_tenant') || ''
   })
-  function logout() {
+  async function logout() {
+    await fetch(`${API}/auth/logout`, { method: 'POST', credentials: 'include' })
     localStorage.removeItem('fw_token')
     localStorage.removeItem('fw_tenant')
     location.href = '/'
@@ -23,7 +25,7 @@
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-6 h-6 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
         </label>
       </div>
-      <div class="flex-1 px-2">FutureWise</div>
+      <div class="flex-1 px-2"><a href="/">FutureWise</a></div>
       <div class="flex-none">
         {#if token}
           <button class="btn btn-ghost" on:click={logout}>Logout</button>

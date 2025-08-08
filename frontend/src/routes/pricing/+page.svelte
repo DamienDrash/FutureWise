@@ -1,3 +1,17 @@
+<script>
+  const API = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
+  let tenant = typeof localStorage !== 'undefined' ? (localStorage.getItem('fw_tenant') || 'alpha') : 'alpha'
+  async function checkout() {
+    const fd = new FormData()
+    fd.append('tenant_id', tenant)
+    const res = await fetch(`${API}/billing/checkout`, { method: 'POST', body: fd })
+    const j = await res.json()
+    if (res.ok && j.url) {
+      location.href = j.url
+    }
+  }
+</script>
+
 <section class="p-10 space-y-6">
   <h1 class="text-3xl font-bold">Pricing</h1>
   <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -22,7 +36,7 @@
           <li>API/Webhooks</li>
           <li>Vergleich/Charts</li>
         </ul>
-        <a class="btn btn-primary" href="/register">Upgrade</a>
+        <button class="btn btn-primary" on:click={checkout}>Upgrade mit Stripe</button>
       </div>
     </div>
     <div class="card bg-base-100 shadow">

@@ -33,9 +33,10 @@
 - [x] Basic Auth UI & Layout: Login/Register, Sidebar, Management `S`
 - [x] Route Guards: Client + Server (SvelteKit hooks) `S`
 - [x] Backend RBAC Guards (hierarchisch) `M`
-- [ ] Cookies (HttpOnly) + CSRF (bereitgestellt; vollständig durchziehen in allen Mutations) `M`
+- [~] Cookies (HttpOnly) + CSRF (Basis integriert; ausrollen auf alle Mutations) `M`
 - [ ] Email (Transaktional): Einladungen, Passwort-Reset `M`
-- [ ] Subscriptions/Billing: Stripe Checkout + Webhooks (Status in DB) `L`
+- [x] Subscriptions: Stripe Checkout (Session) `M`
+- [ ] Billing Webhooks/Plan Gates (Limits, UI Badge) `M`
 - [ ] Admin Console: Übersicht über Tenants, Nutzungsmetriken, Limits `M`
 - [ ] Legal/Compliance: Impressum, Datenschutz, ToS `S`
 
