@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .routers import health, tenants, imports, scenarios, auth, billing
+from .services.db import ensure_base_schema
 
 app = FastAPI(title="FutureWise API", version="0.1.0")
 
@@ -28,3 +29,9 @@ app.include_router(billing.router, prefix="/billing", tags=["billing"])
 @app.get("/")
 def root():
     return {"name": "FutureWise API", "version": app.version}
+
+
+@app.on_event("startup")
+def _startup() -> None:
+    # Ensure base schema exists even if the DB volume was reset
+    ensure_base_schema()
