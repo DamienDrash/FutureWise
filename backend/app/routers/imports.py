@@ -63,12 +63,11 @@ def _upsert_many(tenant_id: str, rows: list[dict]):
 
 
 @router.post("/api")
-def import_via_api(tenant_id: str = Form(...), payload: list[dict] = Form(...)):
-    # payload erwartet JSON-String; FastAPI Form kann Liste nicht automatisch parsen.
-    # Daher empfehlen wir, JSON in field "payload" als Text zu senden.
+def import_via_api(tenant_id: str = Form(...), payload: str = Form(...)):
+    # payload erwartet JSON-String
     import json as _json
     try:
-        rows = _json.loads(payload) if isinstance(payload, str) else payload
+        rows = _json.loads(payload)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Invalid JSON payload: {exc}")
     if not isinstance(rows, list):
