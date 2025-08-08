@@ -1,0 +1,12 @@
+# Conventional Commit Template
+# Format: <type>(<scope>): <subject>
+# Types: feat, fix, chore, docs, style, refactor, perf, test, build, ci, revert
+# Example: feat(api): add scenario simulation endpoint
+
+<type>(<scope>): <subject>
+
+# Body (Motivation, Kontext, technische Details)
+
+# BREAKING CHANGE: <Beschreibung falls API/Verhalten bricht>
+
+# Footer (Issues, PRs, Co-authored-by)
