@@ -1,6 +1,6 @@
-<script lang="ts">
+<script>
   const apiBase = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
-  let health: string = '...' 
+  let health = '...'
 
   async function loadHealth() {
     try {
