@@ -1,6 +1,7 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query, Depends
 from sqlalchemy import text
 from ..services.db import get_sqlalchemy_engine
+from ..services.security import require_role, AuthContext
 import io
 import csv
 import re
@@ -201,8 +202,11 @@ def _upsert_many(source: str, tenant_id: str, rows: list[dict], filename: str | 
         return {"event_id": event_id, "inserted": inserted, "errors": errors}
 
 
+# Guards on write endpoints
 @router.post("/api")
-def import_via_api(tenant_id: str = Form(...), payload: str = Form(...)):
+def import_via_api(tenant_id: str = Form(...), payload: str = Form(...), ctx: AuthContext = Depends(require_role("analyst"))):
+    if ctx.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="wrong tenant")
     try:
         rows = _json.loads(payload)
     except Exception as exc:
@@ -214,7 +218,9 @@ def import_via_api(tenant_id: str = Form(...), payload: str = Form(...)):
 
 
 @router.post("/csv")
-async def import_via_csv(tenant_id: str = Form(...), file: UploadFile = File(...)):
+async def import_via_csv(tenant_id: str = Form(...), file: UploadFile = File(...), ctx: AuthContext = Depends(require_role("analyst"))):
+    if ctx.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="wrong tenant")
     if not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="file must be .csv")
 
@@ -232,7 +238,9 @@ async def import_via_csv(tenant_id: str = Form(...), file: UploadFile = File(...
 
 
 @router.post("/xls")
-async def import_via_xls(tenant_id: str = Form(...), file: UploadFile = File(...)):
+async def import_via_xls(tenant_id: str = Form(...), file: UploadFile = File(...), ctx: AuthContext = Depends(require_role("analyst"))):
+    if ctx.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="wrong tenant")
     fn = file.filename.lower()
     if not (fn.endswith(".xlsx") or fn.endswith(".xls")):
         raise HTTPException(status_code=400, detail="file must be .xlsx or .xls")
@@ -256,7 +264,9 @@ async def import_via_xls(tenant_id: str = Form(...), file: UploadFile = File(...
 
 
 @router.post("/webhook")
-async def import_via_webhook(tenant_id: str = Form(...), payload: str = Form(...)):
+async def import_via_webhook(tenant_id: str = Form(...), payload: str = Form(...), ctx: AuthContext = Depends(require_role("analyst"))):
+    if ctx.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="wrong tenant")
     try:
         rows = _json.loads(payload)
     except Exception as exc:
@@ -329,7 +339,9 @@ async def import_summary(
 
 
 @router.post("/validate", response_model=ValidationResponse, summary="Validate import file without inserting")
-async def validate_import(tenant_id: str = Form(...), file: UploadFile = File(...)):
+async def validate_import(tenant_id: str = Form(...), file: UploadFile = File(...), ctx: AuthContext = Depends(require_role("analyst"))):
+    if ctx.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="wrong tenant")
     engine = get_sqlalchemy_engine()
     with engine.connect() as conn:
         # check tenant exists
@@ -371,7 +383,6 @@ async def validate_import(tenant_id: str = Form(...), file: UploadFile = File(..
     errors: list[ValidationErrorItem] = []
     ok = 0
     if missing_columns:
-        # If required columns are missing, we cannot coerce
         ok = 0
     else:
         for idx, r in enumerate(rows):
