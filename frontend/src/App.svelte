@@ -192,7 +192,7 @@
               </ul>
             </div>
           {/if}
-        {/else}
+        {/if}
       </div>
     </div>
   </div>
