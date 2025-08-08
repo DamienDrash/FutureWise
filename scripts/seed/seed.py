@@ -2,6 +2,7 @@
 import os
 import sys
 from textwrap import dedent
+from sqlalchemy import create_engine, text
 
 
 def get_database_url() -> str:
@@ -14,32 +15,48 @@ def ensure_prerequisites(database_url: str) -> None:
             dedent(
                 """
                 DATABASE_URL ist nicht gesetzt. Bitte setzen und erneut ausführen.
-                Beispiel: export DATABASE_URL=postgresql://user:pass@localhost:5432/futurewise
+                Beispiel: export DATABASE_URL=postgresql://futurewise:futurewise@localhost:5432/futurewise
                 """
             ).strip()
         )
         sys.exit(0)
 
 
-def seed_tenant_alpha() -> None:
-    # Platzhalter: Wird implementiert, sobald das DB-Schema feststeht
-    print("Seede Demo-Tenant 'alpha' ... (wird mit Schema implementiert)")
+def run_migrations_if_any(engine) -> None:
+    # Platzhalter: hier könnten später Alembic/SQL-Dateien eingehängt werden
+    pass
 
 
-def seed_tenant_beta() -> None:
-    # Platzhalter: Wird implementiert, sobald das DB-Schema feststeht
-    print("Seede Demo-Tenant 'beta' ... (wird mit Schema implementiert)")
+def seed_tenants(engine) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS tenants (
+                  tenant_id TEXT PRIMARY KEY,
+                  name TEXT NOT NULL UNIQUE
+                );
+                """
+            )
+        )
+        # Upsert-ähnliches Verhalten über DELETE+INSERT zur Idempotenz
+        for tenant_id, name in [("alpha", "Alpha Demo Tenant"), ("beta", "Beta Demo Tenant")]:
+            conn.execute(text("DELETE FROM tenants WHERE tenant_id = :tid OR name = :name"), {"tid": tenant_id, "name": name})
+            conn.execute(
+                text("INSERT INTO tenants (tenant_id, name) VALUES (:tid, :name)"),
+                {"tid": tenant_id, "name": name},
+            )
 
 
 def main() -> None:
     database_url = get_database_url()
     ensure_prerequisites(database_url)
 
+    engine = create_engine(database_url, pool_pre_ping=True)
     print("Verbunden mit:", database_url)
-    print("Starte Seeding...")
 
-    seed_tenant_alpha()
-    seed_tenant_beta()
+    run_migrations_if_any(engine)
+    seed_tenants(engine)
 
     print("Seeding abgeschlossen.")
 
