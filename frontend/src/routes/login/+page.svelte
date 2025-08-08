@@ -11,10 +11,9 @@
     fd.append('email', email)
     fd.append('password', password)
     fd.append('tenant_id', tenant_id)
-    const res = await fetch(`${API}/auth/login`, { method: 'POST', body: fd })
+    const res = await fetch(`${API}/auth/login`, { method: 'POST', body: fd, credentials: 'include' })
     const t = await res.json()
     if (res.ok) {
-      localStorage.setItem('fw_token', t.access_token)
       localStorage.setItem('fw_tenant', tenant_id)
       location.href = '/'
     } else {

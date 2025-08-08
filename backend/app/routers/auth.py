@@ -1,18 +1,21 @@
-from fastapi import APIRouter, HTTPException, Depends, Form
+from fastapi import APIRouter, HTTPException, Depends, Form, Response, Request
 from sqlalchemy import text
 from ..services.db import get_sqlalchemy_engine
 from passlib.context import CryptContext
 from datetime import datetime, timedelta, timezone
 from jose import jwt
+import os
+from ..services.security import issue_csrf_token
 
 router = APIRouter()
 
-SECRET = "change-me-in-env"
-ALGO = "HS256"
-ACCESS_MINUTES = 60 * 12
+SECRET = os.getenv("JWT_SECRET", "dev-change-me")
+ALGO = os.getenv("JWT_ALGO", "HS256")
+ACCESS_MINUTES = int(os.getenv("JWT_ACCESS_MIN", "720"))
 pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+SECURE_COOKIE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
+COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN", None)
 
-# Minimal schema tables (idempotent created via init.sql in prod; here runtime-safe)
 
 def ensure_tables():
     engine = get_sqlalchemy_engine()
@@ -48,7 +51,6 @@ async def register(email: str = Form(...), password: str = Form(...), display_na
     ensure_tables()
     engine = get_sqlalchemy_engine()
     with engine.begin() as conn:
-        # ensure tenant exists
         t = conn.execute(text("SELECT 1 FROM tenants WHERE tenant_id=:t"), {"t": tenant_id}).first()
         if not t:
             raise HTTPException(status_code=400, detail="tenant does not exist")
@@ -62,7 +64,7 @@ async def register(email: str = Form(...), password: str = Form(...), display_na
 
 
 @router.post("/login")
-async def login(email: str = Form(...), password: str = Form(...), tenant_id: str = Form(...)):
+async def login(response: Response, email: str = Form(...), password: str = Form(...), tenant_id: str = Form(...)):
     ensure_tables()
     engine = get_sqlalchemy_engine()
     with engine.connect() as conn:
@@ -70,13 +72,27 @@ async def login(email: str = Form(...), password: str = Form(...), tenant_id: st
         if not row or not pwd.verify(password, row[1]):
             raise HTTPException(status_code=401, detail="invalid credentials")
         token = create_token({"sub": str(row[0]), "tenant_id": tenant_id, "role": row[2]})
-        return {"access_token": token, "token_type": "bearer"}
+        csrf = issue_csrf_token()
+        # HttpOnly cookie for token, Non-HttpOnly for CSRF echo
+        response.set_cookie("access_token", token, httponly=True, secure=SECURE_COOKIE, samesite="lax", domain=COOKIE_DOMAIN, path="/")
+        response.set_cookie("csrf_token", csrf, httponly=False, secure=SECURE_COOKIE, samesite="lax", domain=COOKIE_DOMAIN, path="/")
+        return {"status": "ok"}
+
+
+@router.post("/logout")
+async def logout(response: Response):
+    response.delete_cookie("access_token", path="/")
+    response.delete_cookie("csrf_token", path="/")
+    return {"status": "ok"}
 
 
 @router.get("/me")
-async def me(token: str):
+async def me(request: Request):
+    tok = request.cookies.get("access_token")
+    if not tok:
+        raise HTTPException(status_code=401, detail="not logged in")
     try:
-        data = jwt.decode(token, SECRET, algorithms=[ALGO])
+        data = jwt.decode(tok, SECRET, algorithms=[ALGO])
         return data
     except Exception:
         raise HTTPException(status_code=401, detail="invalid token")

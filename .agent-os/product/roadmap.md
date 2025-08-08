@@ -24,18 +24,20 @@
 
 ## Phase 2: SaaS Foundation
 
-**Goal:** From prototype to sellable SaaS (multi-tenant, auth, roles, billing, marketing)**
-**Success Criteria:** Users can sign-up/login, manage tenants, assign roles; pricing page; subscription metadata stored; public marketing site live**
+**Goal:** From prototype to sellable SaaS (multi-tenant, auth, roles, billing, marketing)
+**Success Criteria:** Users can sign-up/login, manage tenants, assign roles; pricing page; subscription metadata stored; public marketing site live
 
 ### Features
 
-- [ ] Auth & RBAC: JWT Login/Logout, Rollen (viewer, analyst, manager) `M`
-- [ ] Multi-Tenant Management UI: Tenant erstellen, Benutzer einladen, Rollen zuweisen `M`
+- [x] Public Site: Landing, Pricing Seiten `S`
+- [x] Basic Auth UI & Layout: Login/Register, Sidebar, Management `S`
+- [x] Route Guards: Client + Server (SvelteKit hooks) `S`
+- [x] Backend RBAC Guards (hierarchisch) `M`
+- [ ] Cookies (HttpOnly) + CSRF (bereitgestellt; vollständig durchziehen in allen Mutations) `M`
+- [ ] Email (Transaktional): Einladungen, Passwort-Reset `M`
+- [ ] Subscriptions/Billing: Stripe Checkout + Webhooks (Status in DB) `L`
 - [ ] Admin Console: Übersicht über Tenants, Nutzungsmetriken, Limits `M`
-- [ ] Public Site: Landing, Features, Pricing, Register/Login Flows `S`
-- [ ] Subscriptions/Billing: Stripe (oder Alternative) Checkout + Webhooks (Status in DB) `L`
 - [ ] Legal/Compliance: Impressum, Datenschutz, ToS `S`
-- [ ] Email (Transaktional): Registrierung, Einladungen, Passwort-Reset `M`
 
 ## Phase 3: Differentiators
 
