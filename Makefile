@@ -21,13 +21,13 @@ import-api:
 	docker compose exec backend python3 scripts/import/api_import.py
 
 import-csv:
-	docker compose exec backend sh -lc 'API_BASE=http://localhost:8000 TENANT_ID=alpha scripts/import/csv_import.sh'
+	docker compose exec backend sh -lc 'API_BASE=http://localhost:8000 TENANT_ID=alpha sh scripts/import/csv_import.sh'
 
 import-xls:
 	docker compose exec backend python3 scripts/import/generate_xls_and_import.py
 
 import-webhook:
-	docker compose exec backend sh -lc 'API_BASE=http://localhost:8000 TENANT_ID=alpha scripts/import/webhook_import.sh'
+	docker compose exec backend sh -lc 'API_BASE=http://localhost:8000 TENANT_ID=alpha sh scripts/import/webhook_import.sh'
 
 down:
 	docker compose down -v
