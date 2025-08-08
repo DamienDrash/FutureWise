@@ -1,9 +1,10 @@
 from fastapi import Header, HTTPException, Depends
 from jose import jwt
 from typing import Optional
+import os
 
-ALGO = "HS256"
-SECRET = "change-me-in-env"
+ALGO = os.getenv("JWT_ALGO", "HS256")
+SECRET = os.getenv("JWT_SECRET", "dev-change-me")
 
 ROLE_LEVEL = {
     "viewer": 1,
