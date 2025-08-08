@@ -64,6 +64,55 @@ def seed_tenants(engine) -> None:
             )
         )
 
+        # Seed Users & Roles
+        # Minimal auth tables (idempotent) to ensure inserts work even if init.sql has not yet created them
+        conn.execute(text(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+              user_id BIGSERIAL PRIMARY KEY,
+              email TEXT UNIQUE NOT NULL,
+              password_hash TEXT NOT NULL,
+              display_name TEXT,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            """
+        ))
+        conn.execute(text(
+            """
+            CREATE TABLE IF NOT EXISTS user_tenants (
+              user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
+              tenant_id TEXT REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+              role TEXT NOT NULL DEFAULT 'viewer',
+              PRIMARY KEY (user_id, tenant_id)
+            );
+            """
+        ))
+
+        # Helper to upsert a user and assign a role to a tenant
+        def upsert_user(email: str, password_hash: str, display: str, tenant: str, role: str):
+            row = conn.execute(text("SELECT user_id FROM users WHERE email=:e"), {"e": email}).first()
+            if row:
+                uid = row[0]
+            else:
+                uid = conn.execute(text("INSERT INTO users(email,password_hash,display_name) VALUES (:e,:p,:d) RETURNING user_id"), {"e": email, "p": password_hash, "d": display}).scalar()
+            conn.execute(text("INSERT INTO user_tenants(user_id,tenant_id,role) VALUES (:u,:t,:r) ON CONFLICT (user_id,tenant_id) DO UPDATE SET role=:r"), {"u": uid, "t": tenant, "r": role})
+
+        # Password hashes (bcrypt) for demo: password = "secret"
+        from passlib.context import CryptContext
+        pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        h = pwd.hash("secret")
+
+        # Global/Owner
+        upsert_user("owner@futurewise.local", h, "Owner", "alpha", "owner")
+        # System Manager (platform-level)
+        upsert_user("sysman@futurewise.local", h, "System Manager", "alpha", "system_manager")
+        # Tenant Admins
+        upsert_user("alpha.admin@futurewise.local", h, "Alpha Admin", "alpha", "tenant_admin")
+        upsert_user("beta.admin@futurewise.local", h, "Beta Admin", "beta", "tenant_admin")
+        # Tenant Users
+        upsert_user("alpha.user@futurewise.local", h, "Alpha User", "alpha", "tenant_user")
+        upsert_user("beta.user@futurewise.local", h, "Beta User", "beta", "tenant_user")
+
 
 def main() -> None:
     database_url = get_database_url()
