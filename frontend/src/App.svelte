@@ -377,8 +377,16 @@
         data: {
           labels,
           datasets: [
-            { label: "Revenue Gross (Baseline)", data: bRev, borderColor: "#22c55e" },
-            { label: "Revenue Gross (Scenario)", data: sRev, borderColor: "#ef4444" },
+            {
+              label: "Revenue Gross (Baseline)",
+              data: bRev,
+              borderColor: "#22c55e",
+            },
+            {
+              label: "Revenue Gross (Scenario)",
+              data: sRev,
+              borderColor: "#ef4444",
+            },
           ],
         },
         options: {

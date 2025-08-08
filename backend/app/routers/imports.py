@@ -6,6 +6,7 @@ import csv
 import re
 from datetime import date
 import json as _json
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -30,6 +31,23 @@ OPTIONAL_COLUMNS = [
 ]
 
 EXPECTED_COLUMNS = BASE_COLUMNS  # for CSV minimal check
+
+
+class ValidationErrorItem(BaseModel):
+    row_index: int
+    error: str
+
+
+class ValidationResponse(BaseModel):
+    source: str
+    filename: str
+    columns_present: list[str]
+    missing_columns: list[str]
+    row_count: int
+    sample_rows: list[dict]
+    would_insert_count: int
+    error_count: int
+    errors: list[ValidationErrorItem]
 
 
 def _get_tenant_defaults(conn, tenant_id: str) -> dict:
@@ -308,3 +326,72 @@ async def import_summary(
             {"tid": tenant_id, "df": date_from, "dt": date_to},
         ).mappings().first()
         return {"tenant_id": tenant_id, "range": {"from": str(date_from), "to": str(date_to)}, "summary": dict(res) if res else {}}
+
+
+@router.post("/validate", response_model=ValidationResponse, summary="Validate import file without inserting")
+async def validate_import(tenant_id: str = Form(...), file: UploadFile = File(...)):
+    engine = get_sqlalchemy_engine()
+    with engine.connect() as conn:
+        # check tenant exists
+        exists = conn.execute(text("SELECT 1 FROM tenants WHERE tenant_id=:tid"), {"tid": tenant_id}).first()
+        if not exists:
+            raise HTTPException(status_code=400, detail=f"Unknown tenant_id: {tenant_id}")
+        defaults = _get_tenant_defaults(conn, tenant_id)
+
+    fn = file.filename or ""
+    lower = fn.lower()
+    content = await file.read()
+
+    source = None
+    rows = []
+    columns_present: list[str] = []
+    missing_columns: list[str] = []
+
+    if lower.endswith(".csv"):
+        source = "csv"
+        text_stream = io.StringIO(content.decode("utf-8"))
+        reader = csv.DictReader(text_stream)
+        columns_present = reader.fieldnames or []
+        missing_columns = [c for c in BASE_COLUMNS if c not in columns_present]
+        rows = [row for row in reader]
+    elif lower.endswith(".xlsx") or lower.endswith(".xls"):
+        source = "xls"
+        import pandas as pd
+        try:
+            df = pd.read_excel(io.BytesIO(content))
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Excel parse error: {exc}")
+        columns_present = list(df.columns)
+        missing_columns = [c for c in BASE_COLUMNS if c not in columns_present]
+        rows = df.astype(object).to_dict(orient="records")
+    else:
+        raise HTTPException(status_code=400, detail="file must be .csv/.xlsx/.xls")
+
+    # Row-level validation using coercion (no DB writes)
+    errors: list[ValidationErrorItem] = []
+    ok = 0
+    if missing_columns:
+        # If required columns are missing, we cannot coerce
+        ok = 0
+    else:
+        for idx, r in enumerate(rows):
+            try:
+                _ = _coerce_and_validate_row(tenant_id, r, defaults)
+                ok += 1
+            except HTTPException as he:
+                errors.append(ValidationErrorItem(row_index=idx, error=str(he.detail)))
+            except Exception as exc:
+                errors.append(ValidationErrorItem(row_index=idx, error=str(exc)))
+
+    sample_rows = rows[:5]
+    return ValidationResponse(
+        source=source or "",
+        filename=fn,
+        columns_present=columns_present,
+        missing_columns=missing_columns,
+        row_count=len(rows),
+        sample_rows=sample_rows,
+        would_insert_count=ok,
+        error_count=len(errors),
+        errors=errors,
+    )
