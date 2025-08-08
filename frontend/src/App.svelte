@@ -1,4 +1,5 @@
 <script>
+  import { onDestroy } from "svelte";
   const apiBase = import.meta.env.VITE_API_BASE || "http://localhost:8000";
   let health = "...";
   let tenants = [];
@@ -102,6 +103,7 @@
       const res = await fetch(`${apiBase}/scenarios/simulate`, { method: "POST", body: fd });
       const txt = await res.text();
       simMsg = `${res.status} ${txt}`;
+      await loadScenarios();
     } catch (e) {
       simMsg = `Fehler: ${e}`;
     }
@@ -181,6 +183,66 @@
     } catch (e) {
       selectedEventErrors = [];
     }
+  }
+
+  // Compare Chart
+  import Chart from "chart.js/auto";
+  let selectedScenarioForCompare = null;
+  let compareSeries = null;
+  let ordersChartEl;
+  let revenueChartEl;
+  let ordersChart;
+  let revenueChart;
+
+  function destroyCharts() {
+    if (ordersChart) { ordersChart.destroy(); ordersChart = null; }
+    if (revenueChart) { revenueChart.destroy(); revenueChart = null; }
+  }
+  onDestroy(destroyCharts);
+
+  async function loadCompare() {
+    if (!selectedScenarioForCompare) return;
+    const url = new URL(`${apiBase}/scenarios/${selectedScenarioForCompare}/series`);
+    url.searchParams.set("tenant_id", selectedTenant);
+    url.searchParams.set("date_from", dateFrom);
+    url.searchParams.set("date_to", dateTo);
+    const res = await fetch(url.toString());
+    compareSeries = await res.json();
+    drawCharts();
+  }
+
+  function drawCharts() {
+    destroyCharts();
+    if (!compareSeries) return;
+    const labels = compareSeries.baseline.map(x => x.date);
+    const baselineOrders = compareSeries.baseline.map(x => x.orders);
+    const scenarioOrders = compareSeries.scenario.map(x => x.orders);
+    const baselineRev = compareSeries.baseline.map(x => x.revenue_cents_gross);
+    const scenarioRev = compareSeries.scenario.map(x => x.revenue_cents_gross);
+
+    ordersChart = new Chart(ordersChartEl, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Orders (Baseline)', data: baselineOrders, borderColor: '#60a5fa' },
+          { label: 'Orders (Scenario)', data: scenarioOrders, borderColor: '#f59e0b' }
+        ]
+      },
+      options: { responsive: true, maintainAspectRatio: false }
+    });
+
+    revenueChart = new Chart(revenueChartEl, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Revenue Gross (Baseline)', data: baselineRev, borderColor: '#22c55e' },
+          { label: 'Revenue Gross (Scenario)', data: scenarioRev, borderColor: '#ef4444' }
+        ]
+      },
+      options: { responsive: true, maintainAspectRatio: false }
+    });
   }
 
   loadHealth();
@@ -408,6 +470,28 @@
               </ul>
             </div>
           {/if}
+        {/if}
+      </div>
+    </div>
+
+    <!-- Compare Panel -->
+    <div class="card bg-base-100 shadow">
+      <div class="card-body space-y-3">
+        <h2 class="card-title">Vergleich Baseline vs. Szenario</h2>
+        <div class="flex gap-2 items-end">
+          <select class="select select-bordered max-w-xs" bind:value={selectedScenarioForCompare}>
+            <option value={null} disabled selected>Scenario wählen</option>
+            {#each scenarios as s}
+              <option value={s.scenario_id}>{s.name} (#{s.scenario_id})</option>
+            {/each}
+          </select>
+          <button class="btn btn-primary" on:click={loadCompare}>Vergleich laden</button>
+        </div>
+        {#if compareSeries}
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 h-[320px]">
+            <div class="bg-base-200 rounded p-2"><canvas bind:this={ordersChartEl}></canvas></div>
+            <div class="bg-base-200 rounded p-2"><canvas bind:this={revenueChartEl}></canvas></div>
+          </div>
         {/if}
       </div>
     </div>

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Form
+from fastapi import APIRouter, HTTPException, Form, Query
 from sqlalchemy import text
 from ..services.db import get_sqlalchemy_engine
 from datetime import date, timedelta
@@ -147,3 +147,40 @@ async def simulate_scenario(
             )
 
         return {"status": "ok", "scenario_id": int(sid), "count": len(results)}
+
+
+@router.get("/{scenario_id}/series")
+async def get_series(
+    scenario_id: int,
+    tenant_id: str = Query(...),
+    date_from: date = Query(...),
+    date_to: date = Query(...),
+):
+    engine = get_sqlalchemy_engine()
+    with engine.connect() as conn:
+        baseline = conn.execute(
+            text(
+                """
+                SELECT date, sessions, orders, revenue_cents_gross, revenue_cents_net
+                FROM kpi_daily
+                WHERE tenant_id=:tid AND date BETWEEN :df AND :dt
+                ORDER BY date ASC
+                """
+            ),
+            {"tid": tenant_id, "df": date_from, "dt": date_to},
+        ).mappings().all()
+        scenario = conn.execute(
+            text(
+                """
+                SELECT date, sessions, orders, revenue_cents_gross, revenue_cents_net
+                FROM scenario_results_daily
+                WHERE scenario_id=:sid AND tenant_id=:tid AND date BETWEEN :df AND :dt
+                ORDER BY date ASC
+                """
+            ),
+            {"sid": scenario_id, "tid": tenant_id, "df": date_from, "dt": date_to},
+        ).mappings().all()
+        return {
+            "baseline": [dict(r) for r in baseline],
+            "scenario": [dict(r) for r in scenario],
+        }
