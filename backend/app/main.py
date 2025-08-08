@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import health, tenants
+from .routers import health, tenants, imports
 
 app = FastAPI(title="FutureWise API", version="0.1.0")
 
@@ -19,6 +19,7 @@ app.add_middleware(
 
 app.include_router(health.router, prefix="/health", tags=["health"])
 app.include_router(tenants.router, prefix="/tenants", tags=["tenants"])
+app.include_router(imports.router, prefix="/imports", tags=["imports"])
 
 
 @app.get("/")

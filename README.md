@@ -22,13 +22,29 @@ Empfohlen im Backend-Container ausführen (stellt sicher, dass alle Python-Depen
 make seed
 ```
 
-Alternativ lokal (nur wenn Python-Dependencies installiert sind):
+## Import-Flows testen (API / CSV / XLS / Webhook)
+
+- API (JSON):
 ```
-export DATABASE_URL=postgresql+psycopg://futurewise:futurewise@localhost:5432/futurewise
-python scripts/seed/seed.py
+make import-api
 ```
 
-Hinweis: Keine Fake-, Sample- oder Mock-Daten. UI und API lesen immer aus der DB.
+- CSV (Datei: `data/import/alpha_kpi_daily.csv`):
+```
+make import-csv
+```
+
+- XLS (CSV wird in-memory zu XLSX konvertiert und importiert):
+```
+make import-xls
+```
+
+- Webhook (JSON-Form-Field):
+```
+make import-webhook
+```
+
+Hinweis: Keine Fake-, Sample- oder Mock-Daten zur UI/APIs. Alle Daten werden in die DB geschrieben und von dort gelesen. Die Dateien/Skripte dienen zur initialen Befüllung (Seeding/Import) der Demo-Tenants.
 
 ## Git Workflow
 
@@ -41,9 +57,10 @@ Hinweis: Keine Fake-, Sample- oder Mock-Daten. UI und API lesen immer aus der DB
 - `make up` / `make down`
 - `make logs`
 - `make seed`
+- `make import-*`
 
 ## Tech Stack
 
 - Backend: FastAPI (Python 3.11), SQLAlchemy, PostgreSQL
-- Frontend: Svelte (Vite)
+- Frontend: Svelte (Vite), TailwindCSS + DaisyUI
 - Infra: Docker Compose
