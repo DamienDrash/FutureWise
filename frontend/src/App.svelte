@@ -56,7 +56,9 @@
 
   async function loadScenarios() {
     try {
-      const res = await fetch(`${apiBase}/scenarios?tenant_id=${encodeURIComponent(selectedTenant)}`);
+      const res = await fetch(
+        `${apiBase}/scenarios?tenant_id=${encodeURIComponent(selectedTenant)}`,
+      );
       const json = await res.json();
       scenarios = json.items || [];
     } catch (e) {
@@ -71,7 +73,7 @@
         name: scenarioName,
         price_change_pct: Number(priceChangePct),
         promo_uplift_orders: Number(promoUplift),
-        traffic_change_pct: Number(trafficChange)
+        traffic_change_pct: Number(trafficChange),
       };
       const url = new URL(`${apiBase}/scenarios`);
       url.searchParams.set("tenant_id", selectedTenant);
@@ -92,15 +94,21 @@
     try {
       const fd = new FormData();
       fd.append("tenant_id", selectedTenant);
-      fd.append("params", JSON.stringify({
-        name: scenarioName,
-        price_change_pct: Number(priceChangePct),
-        promo_uplift_orders: Number(promoUplift),
-        traffic_change_pct: Number(trafficChange)
-      }));
+      fd.append(
+        "params",
+        JSON.stringify({
+          name: scenarioName,
+          price_change_pct: Number(priceChangePct),
+          promo_uplift_orders: Number(promoUplift),
+          traffic_change_pct: Number(trafficChange),
+        }),
+      );
       fd.append("date_from", dateFrom);
       fd.append("date_to", dateTo);
-      const res = await fetch(`${apiBase}/scenarios/simulate`, { method: "POST", body: fd });
+      const res = await fetch(`${apiBase}/scenarios/simulate`, {
+        method: "POST",
+        body: fd,
+      });
       const txt = await res.text();
       simMsg = `${res.status} ${txt}`;
       await loadScenarios();
@@ -117,7 +125,10 @@
       fd.append("scenario_id", String(sid));
       fd.append("date_from", dateFrom);
       fd.append("date_to", dateTo);
-      const res = await fetch(`${apiBase}/scenarios/simulate`, { method: "POST", body: fd });
+      const res = await fetch(`${apiBase}/scenarios/simulate`, {
+        method: "POST",
+        body: fd,
+      });
       const txt = await res.text();
       simMsg = `${res.status} ${txt}`;
     } catch (e) {
@@ -194,55 +205,186 @@
   let ordersChart;
   let revenueChart;
 
+  // Vergleichsoptionen
+  let compareMetric = "orders"; // orders | revenue | sessions
+  let compareAsIndex = false;
+
   function destroyCharts() {
-    if (ordersChart) { ordersChart.destroy(); ordersChart = null; }
-    if (revenueChart) { revenueChart.destroy(); revenueChart = null; }
+    if (ordersChart) {
+      ordersChart.destroy();
+      ordersChart = null;
+    }
+    if (revenueChart) {
+      revenueChart.destroy();
+      revenueChart = null;
+    }
   }
   onDestroy(destroyCharts);
 
+  function formatNumber(n) {
+    return new Intl.NumberFormat("de-DE").format(n ?? 0);
+  }
+  function formatEuroCents(c) {
+    const v = (Number(c || 0) / 100);
+    return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(v);
+  }
+
+  function alignSeries(series) {
+    // merged, sort labels
+    const dates = Array.from(new Set([
+      ...series.baseline.map((x) => x.date),
+      ...series.scenario.map((x) => x.date),
+    ])).sort();
+    function pick(arr, key) {
+      const map = new Map(arr.map((x) => [x.date, x[key]]));
+      return dates.map((d) => (map.has(d) ? map.get(d) : null));
+    }
+    return {
+      labels: dates,
+      baseline: {
+        orders: pick(series.baseline, "orders"),
+        revenue: pick(series.baseline, "revenue_cents_gross"),
+        sessions: pick(series.baseline, "sessions"),
+      },
+      scenario: {
+        orders: pick(series.scenario, "orders"),
+        revenue: pick(series.scenario, "revenue_cents_gross"),
+        sessions: pick(series.scenario, "sessions"),
+      },
+    };
+  }
+
+  function indexValues(baseArr, scenArr) {
+    // index as daily ratio*100 (scenario vs baseline)
+    const idx = scenArr.map((v, i) => {
+      const b = baseArr[i] ?? 0;
+      if (!b || v == null) return null;
+      return (v / b) * 100;
+    });
+    return idx;
+  }
+
+  // KPI Summary für Vergleich
+  let compareStats = null;
+  function computeStats(aligned, metric) {
+    const sum = (arr) => arr.reduce((a, b) => a + (Number(b || 0)), 0);
+    const b = sum(aligned.baseline[metric]);
+    const s = sum(aligned.scenario[metric]);
+    const delta = s - b;
+    const pct = b ? (delta / b) * 100 : 0;
+    return { baseline: b, scenario: s, delta, pct };
+  }
+
   async function loadCompare() {
+    compareSeries = null;
+    compareStats = null;
+    destroyCharts();
     if (!selectedScenarioForCompare) return;
-    const url = new URL(`${apiBase}/scenarios/${selectedScenarioForCompare}/series`);
+    const url = new URL(
+      `${apiBase}/scenarios/${selectedScenarioForCompare}/series`,
+    );
     url.searchParams.set("tenant_id", selectedTenant);
     url.searchParams.set("date_from", dateFrom);
     url.searchParams.set("date_to", dateTo);
     const res = await fetch(url.toString());
-    compareSeries = await res.json();
+    const raw = await res.json();
+    const aligned = alignSeries(raw);
+    compareSeries = aligned;
+    compareStats = computeStats(aligned, compareMetric);
     drawCharts();
   }
 
   function drawCharts() {
     destroyCharts();
     if (!compareSeries) return;
-    const labels = compareSeries.baseline.map(x => x.date);
-    const baselineOrders = compareSeries.baseline.map(x => x.orders);
-    const scenarioOrders = compareSeries.scenario.map(x => x.orders);
-    const baselineRev = compareSeries.baseline.map(x => x.revenue_cents_gross);
-    const scenarioRev = compareSeries.scenario.map(x => x.revenue_cents_gross);
+
+    const labels = compareSeries.labels;
+    const metricKey = compareMetric;
+
+    let baselineValues = compareSeries.baseline[metricKey];
+    let scenarioValues = compareSeries.scenario[metricKey];
+
+    if (compareAsIndex) {
+      const idx = indexValues(baselineValues, scenarioValues);
+      baselineValues = baselineValues.map((v, i) => (baselineValues[i] ? 100 : null));
+      scenarioValues = idx;
+    }
 
     ordersChart = new Chart(ordersChartEl, {
-      type: 'line',
+      type: "line",
       data: {
         labels,
         datasets: [
-          { label: 'Orders (Baseline)', data: baselineOrders, borderColor: '#60a5fa' },
-          { label: 'Orders (Scenario)', data: scenarioOrders, borderColor: '#f59e0b' }
-        ]
+          {
+            label: compareAsIndex ? "Baseline (Index)" : "Baseline",
+            data: baselineValues,
+            borderColor: "#60a5fa",
+          },
+          {
+            label: compareAsIndex ? "Scenario (Index)" : "Scenario",
+            data: scenarioValues,
+            borderColor: "#f59e0b",
+          },
+        ],
       },
-      options: { responsive: true, maintainAspectRatio: false }
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const v = ctx.parsed.y;
+                if (compareAsIndex) return `${ctx.dataset.label}: ${v?.toFixed(1)}%`;
+                if (compareMetric === "revenue") return `${ctx.dataset.label}: ${formatEuroCents(v)}`;
+                return `${ctx.dataset.label}: ${formatNumber(v)}`;
+              },
+            },
+          },
+        },
+        scales: {
+          y: {
+            ticks: {
+              callback: (value) => {
+                if (compareAsIndex) return `${value}%`;
+                if (compareMetric === "revenue") return formatEuroCents(value);
+                return formatNumber(value);
+              },
+            },
+          },
+        },
+      },
     });
 
-    revenueChart = new Chart(revenueChartEl, {
-      type: 'line',
-      data: {
-        labels,
-        datasets: [
-          { label: 'Revenue Gross (Baseline)', data: baselineRev, borderColor: '#22c55e' },
-          { label: 'Revenue Gross (Scenario)', data: scenarioRev, borderColor: '#ef4444' }
-        ]
-      },
-      options: { responsive: true, maintainAspectRatio: false }
-    });
+    // Zweites Chart optional für Revenue, wenn nicht ausgewählt
+    const showSecond = compareMetric !== "revenue";
+    if (showSecond) {
+      const bRev = compareSeries.baseline.revenue;
+      const sRev = compareSeries.scenario.revenue;
+      revenueChart = new Chart(revenueChartEl, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            { label: "Revenue Gross (Baseline)", data: bRev, borderColor: "#22c55e" },
+            { label: "Revenue Gross (Scenario)", data: sRev, borderColor: "#ef4444" },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: { y: { ticks: { callback: (v) => formatEuroCents(v) } } },
+        },
+      });
+    }
+  }
+
+  function onCompareOptionChange() {
+    if (compareSeries) {
+      compareStats = computeStats(compareSeries, compareMetric);
+      drawCharts();
+    }
   }
 
   loadHealth();
@@ -295,8 +437,15 @@
       <div class="card-body space-y-4">
         <h2 class="card-title">Import Upload (CSV/XLS)</h2>
         <div class="flex gap-2 items-center">
-          <input type="file" accept=".csv,.xlsx,.xls" class="file-input file-input-bordered w-full max-w-md" on:change={(e) => uploadFile = e.currentTarget.files?.[0]} />
-          <button class="btn btn-primary" on:click={handleUpload}>Importieren</button>
+          <input
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            class="file-input file-input-bordered w-full max-w-md"
+            on:change={(e) => (uploadFile = e.currentTarget.files?.[0])}
+          />
+          <button class="btn btn-primary" on:click={handleUpload}
+            >Importieren</button
+          >
         </div>
         {#if uploadMsg}
           <div class="text-xs opacity-70 break-all">{uploadMsg}</div>
@@ -369,31 +518,59 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="space-y-2">
             <label class="label"><span class="label-text">Name</span></label>
-            <input class="input input-bordered w-full" bind:value={scenarioName} />
+            <input
+              class="input input-bordered w-full"
+              bind:value={scenarioName}
+            />
             <div class="grid grid-cols-3 gap-2">
               <div>
-                <label class="label"><span class="label-text">Price Δ%</span></label>
-                <input class="input input-bordered w-full" type="number" step="0.01" bind:value={priceChangePct} />
+                <label class="label"
+                  ><span class="label-text">Price Δ%</span></label
+                >
+                <input
+                  class="input input-bordered w-full"
+                  type="number"
+                  step="0.01"
+                  bind:value={priceChangePct}
+                />
               </div>
               <div>
-                <label class="label"><span class="label-text">Promo Uplift</span></label>
-                <input class="input input-bordered w-full" type="number" step="0.01" bind:value={promoUplift} />
+                <label class="label"
+                  ><span class="label-text">Promo Uplift</span></label
+                >
+                <input
+                  class="input input-bordered w-full"
+                  type="number"
+                  step="0.01"
+                  bind:value={promoUplift}
+                />
               </div>
               <div>
-                <label class="label"><span class="label-text">Traffic Δ%</span></label>
-                <input class="input input-bordered w-full" type="number" step="0.01" bind:value={trafficChange} />
+                <label class="label"
+                  ><span class="label-text">Traffic Δ%</span></label
+                >
+                <input
+                  class="input input-bordered w-full"
+                  type="number"
+                  step="0.01"
+                  bind:value={trafficChange}
+                />
               </div>
             </div>
             <div class="flex gap-2">
               <button class="btn" on:click={saveScenario}>Speichern</button>
-              <button class="btn btn-primary" on:click={simulateAdhoc}>Ad-hoc simulieren</button>
+              <button class="btn btn-primary" on:click={simulateAdhoc}
+                >Ad-hoc simulieren</button
+              >
             </div>
             {#if simMsg}
               <div class="text-xs opacity-70 break-all">{simMsg}</div>
             {/if}
           </div>
           <div>
-            <label class="label"><span class="label-text">Vorhandene Szenarien</span></label>
+            <label class="label"
+              ><span class="label-text">Vorhandene Szenarien</span></label
+            >
             {#if scenarios.length === 0}
               <p class="text-sm opacity-70">Keine Szenarien.</p>
             {:else}
@@ -401,8 +578,15 @@
                 {#each scenarios as s}
                   <li>
                     <div class="flex items-center justify-between gap-2">
-                      <span>{s.name} <small class="opacity-60">#{s.scenario_id}</small></span>
-                      <button class="btn btn-xs" on:click={() => simulateExisting(s.scenario_id)}>Simulieren</button>
+                      <span
+                        >{s.name}
+                        <small class="opacity-60">#{s.scenario_id}</small></span
+                      >
+                      <button
+                        class="btn btn-xs"
+                        on:click={() => simulateExisting(s.scenario_id)}
+                        >Simulieren</button
+                      >
                     </div>
                   </li>
                 {/each}
@@ -474,27 +658,71 @@
       </div>
     </div>
 
-    <!-- Compare Panel -->
+    <!-- Vergleich Panel -->
     <div class="card bg-base-100 shadow">
       <div class="card-body space-y-3">
         <h2 class="card-title">Vergleich Baseline vs. Szenario</h2>
-        <div class="flex gap-2 items-end">
-          <select class="select select-bordered max-w-xs" bind:value={selectedScenarioForCompare}>
+        <div class="flex flex-wrap gap-2 items-end">
+          <select
+            class="select select-bordered max-w-xs"
+            bind:value={selectedScenarioForCompare}
+          >
             <option value={null} disabled selected>Scenario wählen</option>
             {#each scenarios as s}
               <option value={s.scenario_id}>{s.name} (#{s.scenario_id})</option>
             {/each}
           </select>
-          <button class="btn btn-primary" on:click={loadCompare}>Vergleich laden</button>
+          <select class="select select-bordered" bind:value={compareMetric} on:change={onCompareOptionChange}>
+            <option value="orders">Orders</option>
+            <option value="revenue">Revenue Gross</option>
+            <option value="sessions">Sessions</option>
+          </select>
+          <label class="label cursor-pointer gap-2">
+            <span class="label-text">Index 100 = Baseline</span>
+            <input type="checkbox" class="toggle" bind:checked={compareAsIndex} on:change={onCompareOptionChange} />
+          </label>
+          <button class="btn btn-primary" on:click={loadCompare}
+            >Vergleich laden</button
+          >
         </div>
+
+        {#if compareStats}
+          <div class="stats shadow">
+            <div class="stat">
+              <div class="stat-title">Baseline</div>
+              <div class="stat-value text-base">
+                {compareMetric === 'revenue' ? formatEuroCents(compareStats.baseline) : formatNumber(compareStats.baseline)}
+              </div>
+            </div>
+            <div class="stat">
+              <div class="stat-title">Scenario</div>
+              <div class="stat-value text-base">
+                {compareMetric === 'revenue' ? formatEuroCents(compareStats.scenario) : formatNumber(compareStats.scenario)}
+              </div>
+            </div>
+            <div class="stat">
+              <div class="stat-title">Delta</div>
+              <div class="stat-value text-base">
+                {compareMetric === 'revenue' ? formatEuroCents(compareStats.delta) : formatNumber(compareStats.delta)}
+                <span class={compareStats.pct >= 0 ? 'badge badge-success ml-2' : 'badge badge-error ml-2'}>
+                  {compareStats.pct.toFixed(1)}%
+                </span>
+              </div>
+            </div>
+          </div>
+        {/if}
+
         {#if compareSeries}
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 h-[320px]">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 h-[360px]">
             <div class="bg-base-200 rounded p-2"><canvas bind:this={ordersChartEl}></canvas></div>
-            <div class="bg-base-200 rounded p-2"><canvas bind:this={revenueChartEl}></canvas></div>
+            {#if compareMetric !== 'revenue'}
+              <div class="bg-base-200 rounded p-2"><canvas bind:this={revenueChartEl}></canvas></div>
+            {/if}
           </div>
         {/if}
       </div>
     </div>
+
   </div>
 </main>
 
