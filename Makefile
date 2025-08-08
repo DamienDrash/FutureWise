@@ -14,7 +14,7 @@ logs:
 
 seed:
 	# Seeding wird im Backend-Container mit installiertem SQLAlchemy ausgeführt
-	DockerDBURL=postgresql://futurewise:futurewise@db:5432/futurewise; \
+	DockerDBURL=postgresql+psycopg://futurewise:futurewise@db:5432/futurewise; \
 	docker compose exec -e DATABASE_URL=$$DockerDBURL backend python3 scripts/seed/seed.py
 
 down:
