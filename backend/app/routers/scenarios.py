@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Form
 from sqlalchemy import text
 from ..services.db import get_sqlalchemy_engine
 from datetime import date, timedelta
@@ -49,7 +49,13 @@ async def create_scenario(tenant_id: str, name: str, kind: str = "custom", param
 
 
 @router.post("/simulate")
-async def simulate_scenario(tenant_id: str, scenario_id: int | None = None, params: str | None = None, date_from: str = None, date_to: str = None):
+async def simulate_scenario(
+    tenant_id: str = Form(...),
+    scenario_id: int | None = Form(None),
+    params: str | None = Form(None),
+    date_from: str = Form(...),
+    date_to: str = Form(...),
+):
     engine = get_sqlalchemy_engine()
     with engine.begin() as conn:
         # Load params
