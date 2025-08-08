@@ -12,11 +12,11 @@
 - [x] Adjustable indicators (elasticity, promo uplift, seasonality) `M`
 - [x] Visual forecasting (charts, KPIs, intervals, compare) `M`
 - [x] Scenario storage & versioning (save, clone, tag) `S`
-- [x] Authentication & basic RBAC `S` (PENDING)
+- [ ] Authentication & basic RBAC `S`
 - [x] Seeding script for two demo tenants (continually extended) `S`
 - [x] Import logging (events + error details) `S`
-- [ ] UI: File upload (CSV/XLS) mit Validierung und Preview `M`
-- [ ] API Docs (OpenAPI) für Import/Scenario-Endpunkte `S`
+- [x] UI: File upload (CSV/XLS) mit Validierung und Preview `M`
+- [x] API Docs (OpenAPI) für Import/Scenario-Endpunkte `S`
 
 ### Dependencies
 
