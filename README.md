@@ -24,7 +24,7 @@ make seed
 
 Alternativ lokal (nur wenn Python-Dependencies installiert sind):
 ```
-export DATABASE_URL=postgresql://futurewise:futurewise@localhost:5432/futurewise
+export DATABASE_URL=postgresql+psycopg://futurewise:futurewise@localhost:5432/futurewise
 python scripts/seed/seed.py
 ```
 
