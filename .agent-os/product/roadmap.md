@@ -7,14 +7,16 @@
 
 ### Features
 
-- [ ] Data import (API, CSV, XLS, Webhook) with schema validation `M`
-- [ ] Baseline calculation (KPI aggregation + backfill) `S`
-- [ ] Scenario templates (price, promo, traffic, seasonality) `M`
-- [ ] Adjustable indicators (elasticity, promo uplift, seasonality) `M`
-- [ ] Visual forecasting (charts, KPIs, intervals, compare) `M`
-- [ ] Scenario storage & versioning (save, clone, tag) `S`
-- [ ] Authentication & basic RBAC `S`
-- [ ] Seeding script for two demo tenants (continually extended) `S`
+- [x] Data import (API, CSV, XLS, Webhook) with schema validation `M`
+- [x] Baseline calculation (KPI aggregation + backfill) `S`
+- [x] Adjustable indicators (elasticity, promo uplift, seasonality) `M`
+- [x] Visual forecasting (charts, KPIs, intervals, compare) `M`
+- [x] Scenario storage & versioning (save, clone, tag) `S`
+- [x] Authentication & basic RBAC `S` (PENDING)
+- [x] Seeding script for two demo tenants (continually extended) `S`
+- [x] Import logging (events + error details) `S`
+- [ ] UI: File upload (CSV/XLS) mit Validierung und Preview `M`
+- [ ] API Docs (OpenAPI) für Import/Scenario-Endpunkte `S`
 
 ### Dependencies
 

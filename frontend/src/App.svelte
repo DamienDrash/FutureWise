@@ -82,7 +82,11 @@
     <div class="card bg-base-100 shadow">
       <div class="card-body">
         <h2 class="card-title">System Health</h2>
-        <div class="badge" class:badge-success={health === 'ok'} class:badge-error={health !== 'ok'}>
+        <div
+          class="badge"
+          class:badge-success={health === "ok"}
+          class:badge-error={health !== "ok"}
+        >
           {health}
         </div>
       </div>
@@ -94,7 +98,14 @@
         {#if tenants.length === 0}
           <p class="text-sm opacity-70">Keine Tenants gefunden.</p>
         {:else}
-          <select bind:value={selectedTenant} class="select select-bordered w-full max-w-xs" on:change={() => { loadSummary(); loadEvents(); }}>
+          <select
+            bind:value={selectedTenant}
+            class="select select-bordered w-full max-w-xs"
+            on:change={() => {
+              loadSummary();
+              loadEvents();
+            }}
+          >
             {#each tenants as t}
               <option value={t.tenant_id}>{t.name} ({t.tenant_id})</option>
             {/each}
@@ -109,11 +120,19 @@
         <div class="flex gap-2 items-end">
           <div>
             <label class="label"><span class="label-text">Von</span></label>
-            <input type="date" bind:value={dateFrom} class="input input-bordered" />
+            <input
+              type="date"
+              bind:value={dateFrom}
+              class="input input-bordered"
+            />
           </div>
           <div>
             <label class="label"><span class="label-text">Bis</span></label>
-            <input type="date" bind:value={dateTo} class="input input-bordered" />
+            <input
+              type="date"
+              bind:value={dateTo}
+              class="input input-bordered"
+            />
           </div>
           <button class="btn btn-primary" on:click={loadSummary}>Laden</button>
         </div>
@@ -128,7 +147,9 @@
               </div>
               <div class="stat">
                 <div class="stat-title">Sessions</div>
-                <div class="stat-value">{summary.summary?.sessions_sum ?? 0}</div>
+                <div class="stat-value">
+                  {summary.summary?.sessions_sum ?? 0}
+                </div>
               </div>
               <div class="stat">
                 <div class="stat-title">Orders</div>
@@ -136,11 +157,15 @@
               </div>
               <div class="stat">
                 <div class="stat-title">Revenue Gross (cents)</div>
-                <div class="stat-value">{summary.summary?.revenue_gross_sum ?? 0}</div>
+                <div class="stat-value">
+                  {summary.summary?.revenue_gross_sum ?? 0}
+                </div>
               </div>
               <div class="stat">
                 <div class="stat-title">Revenue Net (cents)</div>
-                <div class="stat-value">{summary.summary?.revenue_net_sum ?? 0}</div>
+                <div class="stat-value">
+                  {summary.summary?.revenue_net_sum ?? 0}
+                </div>
               </div>
             </div>
           {/if}
@@ -156,24 +181,37 @@
         {:else}
           <table class="table">
             <thead>
-              <tr><th>ID</th><th>Source</th><th>Filename</th><th>Inserted</th><th>Errors</th><th>Status</th><th>Aktion</th></tr>
+              <tr
+                ><th>ID</th><th>Source</th><th>Filename</th><th>Inserted</th><th
+                  >Errors</th
+                ><th>Status</th><th>Aktion</th></tr
+              >
             </thead>
             <tbody>
               {#each events as e}
                 <tr>
                   <td>{e.event_id}</td>
                   <td>{e.source}</td>
-                  <td>{e.filename || '-'}</td>
+                  <td>{e.filename || "-"}</td>
                   <td>{e.inserted_count}</td>
                   <td>{e.error_count}</td>
                   <td>
-                    <div class="badge" class:badge-success={e.status==='success'} class:badge-warning={e.status==='partial'} class:badge-error={e.status==='failed'}>
+                    <div
+                      class="badge"
+                      class:badge-success={e.status === "success"}
+                      class:badge-warning={e.status === "partial"}
+                      class:badge-error={e.status === "failed"}
+                    >
                       {e.status}
                     </div>
                   </td>
                   <td>
                     {#if e.error_count > 0}
-                      <button class="btn btn-xs" on:click={() => loadEventErrors(e.event_id)}>Fehler</button>
+                      <button
+                        class="btn btn-xs"
+                        on:click={() => loadEventErrors(e.event_id)}
+                        >Fehler</button
+                      >
                     {:else}
                       <span class="opacity-50">-</span>
                     {/if}
