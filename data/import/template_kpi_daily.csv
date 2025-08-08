@@ -1,0 +1,2 @@
+date,sessions,orders,revenue_cents,conversion_rate,inventory_units,channel,currency,tax_rate,revenue_cents_gross,revenue_cents_net
+2025-08-10,1000,50,1250000,0.05,500,seo,EUR,0.19,,

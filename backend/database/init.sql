@@ -24,3 +24,34 @@ ALTER TABLE kpi_daily ADD COLUMN IF NOT EXISTS revenue_cents_gross BIGINT;
 ALTER TABLE kpi_daily ADD COLUMN IF NOT EXISTS revenue_cents_net BIGINT;
 
 CREATE INDEX IF NOT EXISTS idx_kpi_daily_tenant_date ON kpi_daily(tenant_id, date);
+
+-- Tenant Settings
+CREATE TABLE IF NOT EXISTS tenant_settings (
+  tenant_id TEXT PRIMARY KEY REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+  default_currency TEXT NOT NULL DEFAULT 'EUR',
+  default_tax_rate DOUBLE PRECISION NOT NULL DEFAULT 0.19,
+  default_channel TEXT NOT NULL DEFAULT 'general',
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+-- Import Logging
+CREATE TABLE IF NOT EXISTS import_events (
+  event_id BIGSERIAL PRIMARY KEY,
+  tenant_id TEXT NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+  source TEXT NOT NULL, -- api,csv,xls,webhook
+  filename TEXT,
+  inserted_count INTEGER NOT NULL DEFAULT 0,
+  error_count INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'success', -- success,partial,failed
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_import_events_tenant_created ON import_events(tenant_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS import_event_errors (
+  id BIGSERIAL PRIMARY KEY,
+  event_id BIGINT NOT NULL REFERENCES import_events(event_id) ON DELETE CASCADE,
+  row_index INTEGER,
+  error TEXT NOT NULL,
+  raw_row JSONB
+);
+CREATE INDEX IF NOT EXISTS idx_import_errors_event ON import_event_errors(event_id);

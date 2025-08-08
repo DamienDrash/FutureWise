@@ -23,7 +23,6 @@ def ensure_prerequisites(database_url: str) -> None:
 
 
 def run_migrations_if_any(engine) -> None:
-    # Platzhalter: hier könnten später Alembic/SQL-Dateien eingehängt werden
     pass
 
 
@@ -39,13 +38,31 @@ def seed_tenants(engine) -> None:
                 """
             )
         )
-        # Upsert-ähnliches Verhalten über DELETE+INSERT zur Idempotenz
         for tenant_id, name in [("alpha", "Alpha Demo Tenant"), ("beta", "Beta Demo Tenant")]:
             conn.execute(text("DELETE FROM tenants WHERE tenant_id = :tid OR name = :name"), {"tid": tenant_id, "name": name})
             conn.execute(
                 text("INSERT INTO tenants (tenant_id, name) VALUES (:tid, :name)"),
                 {"tid": tenant_id, "name": name},
             )
+        # Defaults
+        conn.execute(
+            text(
+                """
+                INSERT INTO tenant_settings(tenant_id, default_currency, default_tax_rate, default_channel)
+                VALUES ('alpha', 'EUR', 0.19, 'general')
+                ON CONFLICT (tenant_id) DO UPDATE SET updated_at = NOW();
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO tenant_settings(tenant_id, default_currency, default_tax_rate, default_channel)
+                VALUES ('beta', 'USD', 0.07, 'marketplace')
+                ON CONFLICT (tenant_id) DO UPDATE SET updated_at = NOW();
+                """
+            )
+        )
 
 
 def main() -> None:
