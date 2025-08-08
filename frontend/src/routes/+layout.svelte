@@ -1,6 +1,7 @@
 <script>
   import { onMount } from "svelte";
   import "../app.css";
+  export let data;
   let token = "";
   let tenantId = "";
   const API = import.meta.env.VITE_API_BASE || "http://localhost:8000";
@@ -41,7 +42,7 @@
       </div>
       <div class="flex-1 px-2"><a href="/">FutureWise</a></div>
       <div class="flex-none">
-        {#if token}
+        {#if data?.user}
           <button class="btn btn-ghost" on:click={logout}>Logout</button>
         {:else}
           <a class="btn btn-ghost" href="/login">Login</a>
@@ -57,9 +58,13 @@
       <p class="menu-title">Navigation</p>
       <ul>
         <li><a href="/">Dashboard</a></li>
-        <li><a href="/imports">Imports</a></li>
-        <li><a href="/scenarios">Szenarien</a></li>
-        <li><a href="/management">Management</a></li>
+        {#if data?.user}
+          <li><a href="/imports">Imports</a></li>
+          <li><a href="/scenarios">Szenarien</a></li>
+          {#if data.user.role === 'manager'}
+            <li><a href="/management">Management</a></li>
+          {/if}
+        {/if}
         <li><a href="/pricing">Pricing</a></li>
       </ul>
     </aside>
