@@ -22,7 +22,22 @@
 
 - PostgreSQL, FastAPI service, SvelteKit app, Docker Compose
 
-## Phase 2: Differentiators
+## Phase 2: SaaS Foundation
+
+**Goal:** From prototype to sellable SaaS (multi-tenant, auth, roles, billing, marketing)**
+**Success Criteria:** Users can sign-up/login, manage tenants, assign roles; pricing page; subscription metadata stored; public marketing site live**
+
+### Features
+
+- [ ] Auth & RBAC: JWT Login/Logout, Rollen (viewer, analyst, manager) `M`
+- [ ] Multi-Tenant Management UI: Tenant erstellen, Benutzer einladen, Rollen zuweisen `M`
+- [ ] Admin Console: Übersicht über Tenants, Nutzungsmetriken, Limits `M`
+- [ ] Public Site: Landing, Features, Pricing, Register/Login Flows `S`
+- [ ] Subscriptions/Billing: Stripe (oder Alternative) Checkout + Webhooks (Status in DB) `L`
+- [ ] Legal/Compliance: Impressum, Datenschutz, ToS `S`
+- [ ] Email (Transaktional): Registrierung, Einladungen, Passwort-Reset `M`
+
+## Phase 3: Differentiators
 
 **Goal:** Improve accuracy, governance, and collaboration
 **Success Criteria:** +10-20% forecast error reduction; auditable decisions; multi-user workflows
@@ -36,11 +51,7 @@
 - [ ] Tenant isolation & advanced RBAC `M`
 - [ ] API & Webhooks for automation `S`
 
-### Dependencies
-
-- Centralized logging, metrics, and feature flags
-
-## Phase 3: Scale & Enterprise
+## Phase 4: Scale & Enterprise
 
 **Goal:** Scale to many tenants; enhance performance, reliability, and ecosystem integrations
 **Success Criteria:** 50+ tenants; p95 < 300ms for key APIs; near-zero manual ops
@@ -53,7 +64,3 @@
 - [ ] SSO (SAML/OIDC) and audit exports `M`
 - [ ] Integration apps (e.g., Shopify, BigCommerce, GA4, Ads) `L`
 - [ ] Observability (tracing, metrics, logs) `S`
-
-### Dependencies
-
-- Optional: k8s migration when scale demands
