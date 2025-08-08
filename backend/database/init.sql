@@ -95,3 +95,28 @@ CREATE TABLE IF NOT EXISTS scenario_results_daily (
   PRIMARY KEY (scenario_id, date)
 );
 CREATE INDEX IF NOT EXISTS idx_scenario_results_tenant_date ON scenario_results_daily(tenant_id, date);
+
+-- RBAC & Invitations
+CREATE TABLE IF NOT EXISTS users (
+  user_id BIGSERIAL PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  display_name TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS user_tenants (
+  user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
+  tenant_id TEXT REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+  role TEXT NOT NULL DEFAULT 'viewer',
+  PRIMARY KEY (user_id, tenant_id)
+);
+
+CREATE TABLE IF NOT EXISTS invitations (
+  token TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'viewer',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  accepted_at TIMESTAMPTZ
+);
