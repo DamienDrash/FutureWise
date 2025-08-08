@@ -10,6 +10,119 @@
   let events = [];
   let selectedEventErrors = [];
 
+  // Import Upload
+  let uploadFile = null;
+  let uploadMsg = "";
+
+  async function handleUpload() {
+    uploadMsg = "";
+    try {
+      if (!uploadFile) {
+        uploadMsg = "Bitte Datei wählen (.csv/.xlsx/.xls)";
+        return;
+      }
+      const name = uploadFile.name.toLowerCase();
+      const fd = new FormData();
+      fd.append("tenant_id", selectedTenant);
+      fd.append("file", uploadFile);
+      let url = "";
+      if (name.endsWith(".csv")) {
+        url = `${apiBase}/imports/csv`;
+      } else if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+        url = `${apiBase}/imports/xls`;
+      } else {
+        uploadMsg = "Ungültige Dateiendung. Erlaubt: .csv/.xlsx/.xls";
+        return;
+      }
+      const res = await fetch(url, { method: "POST", body: fd });
+      const txt = await res.text();
+      uploadMsg = `${res.status} ${txt}`;
+      // Refresh
+      await loadEvents();
+      await loadSummary();
+    } catch (e) {
+      uploadMsg = `Fehler: ${e}`;
+    }
+  }
+
+  // Scenarios
+  let scenarios = [];
+  let scenarioName = "Price -5%";
+  let priceChangePct = -0.05;
+  let promoUplift = 0.1;
+  let trafficChange = 0.0;
+  let simMsg = "";
+
+  async function loadScenarios() {
+    try {
+      const res = await fetch(`${apiBase}/scenarios?tenant_id=${encodeURIComponent(selectedTenant)}`);
+      const json = await res.json();
+      scenarios = json.items || [];
+    } catch (e) {
+      scenarios = [];
+    }
+  }
+
+  async function saveScenario() {
+    simMsg = "";
+    try {
+      const params = {
+        name: scenarioName,
+        price_change_pct: Number(priceChangePct),
+        promo_uplift_orders: Number(promoUplift),
+        traffic_change_pct: Number(trafficChange)
+      };
+      const url = new URL(`${apiBase}/scenarios`);
+      url.searchParams.set("tenant_id", selectedTenant);
+      url.searchParams.set("name", scenarioName);
+      url.searchParams.set("kind", "custom");
+      url.searchParams.set("params", JSON.stringify(params));
+      const res = await fetch(url.toString(), { method: "POST" });
+      const txt = await res.text();
+      simMsg = `${res.status} ${txt}`;
+      await loadScenarios();
+    } catch (e) {
+      simMsg = `Fehler: ${e}`;
+    }
+  }
+
+  async function simulateAdhoc() {
+    simMsg = "";
+    try {
+      const fd = new FormData();
+      fd.append("tenant_id", selectedTenant);
+      fd.append("params", JSON.stringify({
+        name: scenarioName,
+        price_change_pct: Number(priceChangePct),
+        promo_uplift_orders: Number(promoUplift),
+        traffic_change_pct: Number(trafficChange)
+      }));
+      fd.append("date_from", dateFrom);
+      fd.append("date_to", dateTo);
+      const res = await fetch(`${apiBase}/scenarios/simulate`, { method: "POST", body: fd });
+      const txt = await res.text();
+      simMsg = `${res.status} ${txt}`;
+    } catch (e) {
+      simMsg = `Fehler: ${e}`;
+    }
+  }
+
+  async function simulateExisting(sid) {
+    simMsg = "";
+    try {
+      const fd = new FormData();
+      fd.append("tenant_id", selectedTenant);
+      fd.append("scenario_id", String(sid));
+      fd.append("date_from", dateFrom);
+      fd.append("date_to", dateTo);
+      const res = await fetch(`${apiBase}/scenarios/simulate`, { method: "POST", body: fd });
+      const txt = await res.text();
+      simMsg = `${res.status} ${txt}`;
+    } catch (e) {
+      simMsg = `Fehler: ${e}`;
+    }
+  }
+
   async function loadHealth() {
     try {
       const res = await fetch(`${apiBase}/health/ready`);
@@ -73,10 +186,11 @@
   loadHealth();
   loadTenants();
   loadEvents();
+  loadScenarios();
 </script>
 
 <main class="p-6 min-h-screen bg-base-200">
-  <div class="max-w-4xl mx-auto space-y-6">
+  <div class="max-w-5xl mx-auto space-y-6">
     <h1 class="text-2xl font-bold">FutureWise</h1>
 
     <div class="card bg-base-100 shadow">
@@ -104,12 +218,26 @@
             on:change={() => {
               loadSummary();
               loadEvents();
+              loadScenarios();
             }}
           >
             {#each tenants as t}
               <option value={t.tenant_id}>{t.name} ({t.tenant_id})</option>
             {/each}
           </select>
+        {/if}
+      </div>
+    </div>
+
+    <div class="card bg-base-100 shadow">
+      <div class="card-body space-y-4">
+        <h2 class="card-title">Import Upload (CSV/XLS)</h2>
+        <div class="flex gap-2 items-center">
+          <input type="file" accept=".csv,.xlsx,.xls" class="file-input file-input-bordered w-full max-w-md" on:change={(e) => uploadFile = e.currentTarget.files?.[0]} />
+          <button class="btn btn-primary" on:click={handleUpload}>Importieren</button>
+        </div>
+        {#if uploadMsg}
+          <div class="text-xs opacity-70 break-all">{uploadMsg}</div>
         {/if}
       </div>
     </div>
@@ -170,6 +298,56 @@
             </div>
           {/if}
         {/if}
+      </div>
+    </div>
+
+    <div class="card bg-base-100 shadow">
+      <div class="card-body space-y-3">
+        <h2 class="card-title">Szenarien</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="space-y-2">
+            <label class="label"><span class="label-text">Name</span></label>
+            <input class="input input-bordered w-full" bind:value={scenarioName} />
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <label class="label"><span class="label-text">Price Δ%</span></label>
+                <input class="input input-bordered w-full" type="number" step="0.01" bind:value={priceChangePct} />
+              </div>
+              <div>
+                <label class="label"><span class="label-text">Promo Uplift</span></label>
+                <input class="input input-bordered w-full" type="number" step="0.01" bind:value={promoUplift} />
+              </div>
+              <div>
+                <label class="label"><span class="label-text">Traffic Δ%</span></label>
+                <input class="input input-bordered w-full" type="number" step="0.01" bind:value={trafficChange} />
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <button class="btn" on:click={saveScenario}>Speichern</button>
+              <button class="btn btn-primary" on:click={simulateAdhoc}>Ad-hoc simulieren</button>
+            </div>
+            {#if simMsg}
+              <div class="text-xs opacity-70 break-all">{simMsg}</div>
+            {/if}
+          </div>
+          <div>
+            <label class="label"><span class="label-text">Vorhandene Szenarien</span></label>
+            {#if scenarios.length === 0}
+              <p class="text-sm opacity-70">Keine Szenarien.</p>
+            {:else}
+              <ul class="menu bg-base-100">
+                {#each scenarios as s}
+                  <li>
+                    <div class="flex items-center justify-between gap-2">
+                      <span>{s.name} <small class="opacity-60">#{s.scenario_id}</small></span>
+                      <button class="btn btn-xs" on:click={() => simulateExisting(s.scenario_id)}>Simulieren</button>
+                    </div>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+          </div>
+        </div>
       </div>
     </div>
 
