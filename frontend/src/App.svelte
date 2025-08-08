@@ -1,5 +1,5 @@
 <script>
-  import { onDestroy } from "svelte";
+  import { onDestroy, tick } from "svelte";
   const apiBase = import.meta.env.VITE_API_BASE || "http://localhost:8000";
   let health = "...";
   let tenants = [];
@@ -225,16 +225,21 @@
     return new Intl.NumberFormat("de-DE").format(n ?? 0);
   }
   function formatEuroCents(c) {
-    const v = (Number(c || 0) / 100);
-    return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(v);
+    const v = Number(c || 0) / 100;
+    return new Intl.NumberFormat("de-DE", {
+      style: "currency",
+      currency: "EUR",
+    }).format(v);
   }
 
   function alignSeries(series) {
     // merged, sort labels
-    const dates = Array.from(new Set([
-      ...series.baseline.map((x) => x.date),
-      ...series.scenario.map((x) => x.date),
-    ])).sort();
+    const dates = Array.from(
+      new Set([
+        ...series.baseline.map((x) => x.date),
+        ...series.scenario.map((x) => x.date),
+      ]),
+    ).sort();
     function pick(arr, key) {
       const map = new Map(arr.map((x) => [x.date, x[key]]));
       return dates.map((d) => (map.has(d) ? map.get(d) : null));
@@ -267,7 +272,7 @@
   // KPI Summary für Vergleich
   let compareStats = null;
   function computeStats(aligned, metric) {
-    const sum = (arr) => arr.reduce((a, b) => a + (Number(b || 0)), 0);
+    const sum = (arr) => arr.reduce((a, b) => a + Number(b || 0), 0);
     const b = sum(aligned.baseline[metric]);
     const s = sum(aligned.scenario[metric]);
     const delta = s - b;
@@ -291,6 +296,7 @@
     const aligned = alignSeries(raw);
     compareSeries = aligned;
     compareStats = computeStats(aligned, compareMetric);
+    await tick();
     drawCharts();
   }
 
@@ -306,7 +312,9 @@
 
     if (compareAsIndex) {
       const idx = indexValues(baselineValues, scenarioValues);
-      baselineValues = baselineValues.map((v, i) => (baselineValues[i] ? 100 : null));
+      baselineValues = baselineValues.map((v, i) =>
+        baselineValues[i] ? 100 : null,
+      );
       scenarioValues = idx;
     }
 
@@ -336,8 +344,10 @@
             callbacks: {
               label: (ctx) => {
                 const v = ctx.parsed.y;
-                if (compareAsIndex) return `${ctx.dataset.label}: ${v?.toFixed(1)}%`;
-                if (compareMetric === "revenue") return `${ctx.dataset.label}: ${formatEuroCents(v)}`;
+                if (compareAsIndex)
+                  return `${ctx.dataset.label}: ${v?.toFixed(1)}%`;
+                if (compareMetric === "revenue")
+                  return `${ctx.dataset.label}: ${formatEuroCents(v)}`;
                 return `${ctx.dataset.label}: ${formatNumber(v)}`;
               },
             },
@@ -672,14 +682,23 @@
               <option value={s.scenario_id}>{s.name} (#{s.scenario_id})</option>
             {/each}
           </select>
-          <select class="select select-bordered" bind:value={compareMetric} on:change={onCompareOptionChange}>
+          <select
+            class="select select-bordered"
+            bind:value={compareMetric}
+            on:change={onCompareOptionChange}
+          >
             <option value="orders">Orders</option>
             <option value="revenue">Revenue Gross</option>
             <option value="sessions">Sessions</option>
           </select>
           <label class="label cursor-pointer gap-2">
             <span class="label-text">Index 100 = Baseline</span>
-            <input type="checkbox" class="toggle" bind:checked={compareAsIndex} on:change={onCompareOptionChange} />
+            <input
+              type="checkbox"
+              class="toggle"
+              bind:checked={compareAsIndex}
+              on:change={onCompareOptionChange}
+            />
           </label>
           <button class="btn btn-primary" on:click={loadCompare}
             >Vergleich laden</button
@@ -691,20 +710,30 @@
             <div class="stat">
               <div class="stat-title">Baseline</div>
               <div class="stat-value text-base">
-                {compareMetric === 'revenue' ? formatEuroCents(compareStats.baseline) : formatNumber(compareStats.baseline)}
+                {compareMetric === "revenue"
+                  ? formatEuroCents(compareStats.baseline)
+                  : formatNumber(compareStats.baseline)}
               </div>
             </div>
             <div class="stat">
               <div class="stat-title">Scenario</div>
               <div class="stat-value text-base">
-                {compareMetric === 'revenue' ? formatEuroCents(compareStats.scenario) : formatNumber(compareStats.scenario)}
+                {compareMetric === "revenue"
+                  ? formatEuroCents(compareStats.scenario)
+                  : formatNumber(compareStats.scenario)}
               </div>
             </div>
             <div class="stat">
               <div class="stat-title">Delta</div>
               <div class="stat-value text-base">
-                {compareMetric === 'revenue' ? formatEuroCents(compareStats.delta) : formatNumber(compareStats.delta)}
-                <span class={compareStats.pct >= 0 ? 'badge badge-success ml-2' : 'badge badge-error ml-2'}>
+                {compareMetric === "revenue"
+                  ? formatEuroCents(compareStats.delta)
+                  : formatNumber(compareStats.delta)}
+                <span
+                  class={compareStats.pct >= 0
+                    ? "badge badge-success ml-2"
+                    : "badge badge-error ml-2"}
+                >
                   {compareStats.pct.toFixed(1)}%
                 </span>
               </div>
@@ -714,15 +743,18 @@
 
         {#if compareSeries}
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 h-[360px]">
-            <div class="bg-base-200 rounded p-2"><canvas bind:this={ordersChartEl}></canvas></div>
-            {#if compareMetric !== 'revenue'}
-              <div class="bg-base-200 rounded p-2"><canvas bind:this={revenueChartEl}></canvas></div>
+            <div class="bg-base-200 rounded p-2">
+              <canvas bind:this={ordersChartEl}></canvas>
+            </div>
+            {#if compareMetric !== "revenue"}
+              <div class="bg-base-200 rounded p-2">
+                <canvas bind:this={revenueChartEl}></canvas>
+              </div>
             {/if}
           </div>
         {/if}
       </div>
     </div>
-
   </div>
 </main>
 
