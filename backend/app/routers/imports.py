@@ -282,3 +282,29 @@ async def get_import_event_errors(event_id: int):
             {"eid": event_id},
         ).mappings().all()
         return {"items": [dict(r) for r in rows]}
+
+
+@router.get("/summary")
+async def import_summary(
+    tenant_id: str = Query(...),
+    date_from: date = Query(...),
+    date_to: date = Query(...),
+):
+    engine = get_sqlalchemy_engine()
+    with engine.connect() as conn:
+        res = conn.execute(
+            text(
+                """
+                SELECT 
+                  COUNT(*) AS num_days,
+                  COALESCE(SUM(sessions),0) AS sessions_sum,
+                  COALESCE(SUM(orders),0) AS orders_sum,
+                  COALESCE(SUM(revenue_cents_gross),0) AS revenue_gross_sum,
+                  COALESCE(SUM(revenue_cents_net),0) AS revenue_net_sum
+                FROM kpi_daily
+                WHERE tenant_id = :tid AND date BETWEEN :df AND :dt
+                """
+            ),
+            {"tid": tenant_id, "df": date_from, "dt": date_to},
+        ).mappings().first()
+        return {"tenant_id": tenant_id, "range": {"from": str(date_from), "to": str(date_to)}, "summary": dict(res) if res else {}}
