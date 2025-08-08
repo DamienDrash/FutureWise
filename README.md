@@ -16,8 +16,13 @@ docker compose up --build
 
 ## Seeding
 
-Setze `DATABASE_URL` und starte das Skript:
+Empfohlen im Backend-Container ausführen (stellt sicher, dass alle Python-Dependencies vorhanden sind):
 
+```
+make seed
+```
+
+Alternativ lokal (nur wenn Python-Dependencies installiert sind):
 ```
 export DATABASE_URL=postgresql://futurewise:futurewise@localhost:5432/futurewise
 python scripts/seed/seed.py
@@ -30,6 +35,12 @@ Hinweis: Keine Fake-, Sample- oder Mock-Daten. UI und API lesen immer aus der DB
 - main: stabil
 - dev: Integration
 - feature/<name>: Feature-Entwicklung; Merge in dev nach Nutzer-Freigabe
+
+## Useful
+
+- `make up` / `make down`
+- `make logs`
+- `make seed`
 
 ## Tech Stack
 
