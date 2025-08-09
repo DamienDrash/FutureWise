@@ -1,9 +1,8 @@
 /** @type {import('tailwindcss').Config} */
-export default {
+module.exports = {
   darkMode: ['class'], // Dark mode is toggled via the `.dark` class
   content: [
-    './index.html',
-    './src/**/*.{svelte,ts,js}'
+    './src/**/*.{html,js,svelte,ts}', // Adjust to your project's structure
   ],
   theme: {
     extend: {
@@ -47,10 +46,10 @@ export default {
         mono: 'var(--font-mono)',
       },
       borderRadius: {
-        sm: 'calc(var(--radius) - 4px)',
-        md: 'var(--radius)',
-        lg: 'calc(var(--radius) + 4px)',
-        xl: 'calc(var(--radius) + 8px)',
+        sm: 'var(--radius-sm)',
+        md: 'var(--radius-md)',
+        lg: 'var(--radius-lg)',
+        xl: 'var(--radius-xl)',
       },
       boxShadow: {
         '2xs': 'var(--shadow-2xs)',
@@ -63,12 +62,14 @@ export default {
         '2xl': 'var(--shadow-2xl)',
       },
       letterSpacing: {
+        tighter: 'var(--tracking-tighter)',
+        tight: 'var(--tracking-tight)',
         normal: 'var(--tracking-normal)',
-      },
-      screens: {
-        xs: '400px',
+        wide: 'var(--tracking-wide)',
+        wider: 'var(--tracking-wider)',
+        widest: 'var(--tracking-widest)',
       },
     },
   },
   plugins: [],
-}
+};

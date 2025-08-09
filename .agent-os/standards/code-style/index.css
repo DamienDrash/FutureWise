@@ -1,7 +1,3 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
 :root {
   /* Light Mode Colors */
   --background: oklch(0.9513 0.0074 260.7315);
@@ -60,8 +56,6 @@
   /* Tracking & Spacing */
   --tracking-normal: 0rem;
   --spacing: 0.25rem;
-
-  color-scheme: light dark;
 }
 
 /* Dark Mode */
@@ -100,11 +94,4 @@
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: var(--background);
   --sidebar-ring: var(--primary);
-}
-
-body {
-  margin: 0;
-  font-family: var(--font-sans);
-  background-color: var(--background);
-  color: var(--foreground);
 }

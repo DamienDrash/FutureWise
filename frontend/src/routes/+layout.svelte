@@ -1,72 +1,74 @@
-<script>
-  import { onMount } from "svelte";
-  import "../app.css";
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import '../app.css';
+  import Sidebar from '$lib/components/Sidebar.svelte';
+  import Header from '$lib/components/Header.svelte';
+  
   export let data;
-  let token = "";
-  let tenantId = "";
-  const API = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+  
+  let token = '';
+  let tenantId = '';
+  let sidebarOpen = false;
+  
+  const API = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
+  
   onMount(() => {
-    token = localStorage.getItem("fw_token") || "";
-    tenantId = localStorage.getItem("fw_tenant") || "";
+    token = localStorage.getItem('fw_token') || '';
+    tenantId = localStorage.getItem('fw_tenant') || '';
   });
+  
   async function logout() {
     await fetch(`${API}/auth/logout`, {
-      method: "POST",
-      credentials: "include",
+      method: 'POST',
+      credentials: 'include',
     });
-    localStorage.removeItem("fw_token");
-    localStorage.removeItem("fw_tenant");
-    location.href = "/";
+    localStorage.removeItem('fw_token');
+    localStorage.removeItem('fw_tenant');
+    location.href = '/';
+  }
+
+  function toggleSidebar() {
+    sidebarOpen = !sidebarOpen;
   }
 </script>
 
-<div class="drawer lg:drawer-open">
-  <input id="drawer" type="checkbox" class="drawer-toggle" />
-  <div class="drawer-content">
-    <div class="navbar bg-base-100 border-b border-base-200">
-      <div class="flex-none lg:hidden">
-        <label for="drawer" class="btn btn-ghost btn-square">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            class="inline-block w-6 h-6 stroke-current"
-            ><path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M4 6h16M4 12h16M4 18h16"
-            ></path></svg
-          >
-        </label>
+<div class="bg-background text-foreground min-h-screen flex">
+  <!-- Sidebar for desktop -->
+  <div class="hidden lg:flex lg:flex-shrink-0">
+    <Sidebar user={data?.user} />
+  </div>
+
+  <!-- Mobile sidebar overlay -->
+  {#if sidebarOpen}
+    <div class="lg:hidden fixed inset-0 z-50 flex">
+      <!-- Overlay -->
+      <div 
+        class="fixed inset-0 bg-background/80 backdrop-blur-sm" 
+        on:click={toggleSidebar}
+        on:keydown={(e) => e.key === 'Escape' && toggleSidebar()}
+        role="button"
+        tabindex="0"
+        aria-label="Close sidebar">
       </div>
-      <div class="flex-1 px-2"><a href="/">FutureWise</a></div>
-      <div class="flex-none">
-        {#if data?.user}
-          <button class="btn btn-ghost" on:click={logout}>Logout</button>
-        {:else}
-          <a class="btn btn-ghost" href="/login">Login</a>
-          <a class="btn btn-primary" href="/register">Register</a>
-        {/if}
+      <!-- Sidebar -->
+      <div class="relative flex flex-col w-80 bg-sidebar">
+        <Sidebar user={data?.user} />
       </div>
     </div>
-    <slot />
-  </div>
-  <div class="drawer-side">
-    <label for="drawer" class="drawer-overlay"></label>
-    <aside class="menu p-4 w-80 bg-base-200">
-      <p class="menu-title">Navigation</p>
-      <ul>
-        <li><a href="/">Dashboard</a></li>
-        {#if data?.user}
-          <li><a href="/imports">Imports</a></li>
-          <li><a href="/scenarios">Szenarien</a></li>
-          {#if data.user.role === 'manager'}
-            <li><a href="/management">Management</a></li>
-          {/if}
-        {/if}
-        <li><a href="/pricing">Pricing</a></li>
-      </ul>
-    </aside>
+  {/if}
+
+  <!-- Main content area -->
+  <div class="flex-1 flex flex-col overflow-hidden">
+    <Header 
+      user={data?.user} 
+      onLogout={logout}
+      onToggleSidebar={toggleSidebar} />
+    
+    <!-- Page content -->
+    <main class="flex-1 overflow-y-auto bg-background">
+      <div class="p-4 lg:p-6">
+        <slot />
+      </div>
+    </main>
   </div>
 </div>
