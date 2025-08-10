@@ -7,6 +7,9 @@
 
     export let user = null;
 
+    // Get API base URL from environment
+    const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+
     // Dynamic actions based on user role
     $: actions = getActionsForUser(user);
 
@@ -57,7 +60,7 @@
                 {
                     title: "API Documentation",
                     description: "System-API Dokumentation",
-                    href: "/api/docs",
+                    href: `${API_BASE}/docs`,
                     icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
                     color: "bg-chart-4/10 text-chart-4",
                     external: true,
@@ -92,7 +95,7 @@
                 {
                     title: "API Integration",
                     description: "Tenant-API nutzen",
-                    href: "/api/docs",
+                    href: `${API_BASE}/docs`,
                     icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
                     color: "bg-chart-4/10 text-chart-4",
                     external: true,
@@ -126,7 +129,7 @@
             {
                 title: "API Documentation",
                 description: "Integration & Entwicklung",
-                href: "/api/docs",
+                href: "http://localhost:8000/docs",
                 icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
                 color: "bg-chart-4/10 text-chart-4",
                 external: true,

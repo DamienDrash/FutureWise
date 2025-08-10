@@ -9,6 +9,49 @@ export const authStore = writable<AuthStore>({
     isAuthenticated: false
 });
 
+// Client-side auth initialization
+if (typeof window !== 'undefined') {
+    const initializeAuth = async () => {
+        try {
+            // Check if we have a stored token (from localStorage as fallback)
+            const storedToken = localStorage.getItem('fw_token');
+
+            // Try to get user info from server using HTTP-only cookie
+            const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
+            const response = await fetch(`${API_BASE}/auth/me`, {
+                credentials: 'include'
+            });
+
+            if (response.ok) {
+                const userData = await response.json();
+                authStore.set({
+                    user: userData,
+                    token: storedToken, // Use stored token if available
+                    isAuthenticated: true
+                });
+            } else {
+                // Clear any stored token if auth failed
+                localStorage.removeItem('fw_token');
+                authStore.set({
+                    user: null,
+                    token: null,
+                    isAuthenticated: false
+                });
+            }
+        } catch (error) {
+            console.error('Auth initialization failed:', error);
+            authStore.set({
+                user: null,
+                token: null,
+                isAuthenticated: false
+            });
+        }
+    };
+
+    // Initialize on page load
+    initializeAuth();
+}
+
 // Helper Funktionen für Auth Store
 export const setUser = (user: User, token: string) => {
     authStore.set({
@@ -61,7 +104,7 @@ export const isTenantAdmin = (role: UserRole): boolean => role === 'tenant_admin
 
 // Get user display info
 export const getUserDisplayInfo = (user: User | null) => {
-    if (!user) return null;
+    if (!user || !user.email) return null;
 
     return {
         name: user.display_name || user.email.split('@')[0],

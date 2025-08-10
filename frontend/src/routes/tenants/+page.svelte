@@ -5,67 +5,60 @@
     import type { Tenant, TenantStatus } from "$lib/types";
     import { tenantStatusColors } from "$lib/types";
 
-    export let data: any;
+    export const data = undefined;
 
     let tenants: Tenant[] = [];
     let showCreateModal = false;
     let newTenantName = "";
     let isLoading = false;
 
-    const mockTenants = [
-        {
-            tenant_id: "alpha",
-            name: "Alpha Corporation",
-            users: 45,
-            scenarios: 12,
-            revenue: 25400,
-            status: "active",
-            created_at: "2024-01-15",
-        },
-        {
-            tenant_id: "beta",
-            name: "Beta Industries",
-            users: 23,
-            scenarios: 8,
-            revenue: 18200,
-            status: "active",
-            created_at: "2024-02-20",
-        },
-        {
-            tenant_id: "gamma",
-            name: "Gamma Solutions",
-            users: 12,
-            scenarios: 4,
-            revenue: 9800,
-            status: "trial",
-            created_at: "2024-03-10",
-        },
-    ];
+    const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+
+    async function loadTenants() {
+        isLoading = true;
+        try {
+            const res = await fetch(`${API_BASE}/tenants`, {
+                credentials: "include",
+            });
+            const data = await res.json();
+            tenants = data.items || [];
+        } catch (error) {
+            console.error("Failed to load tenants:", error);
+        } finally {
+            isLoading = false;
+        }
+    }
 
     onMount(() => {
-        tenants = mockTenants;
+        loadTenants();
     });
 
-    function createTenant() {
+    async function createTenant() {
         if (!newTenantName.trim()) return;
 
         isLoading = true;
-        // Simulate API call
-        setTimeout(() => {
-            const newTenant = {
-                tenant_id: newTenantName.toLowerCase().replace(/\s+/g, ""),
-                name: newTenantName,
-                users: 0,
-                scenarios: 0,
-                revenue: 0,
-                status: "trial",
-                created_at: new Date().toISOString().split("T")[0],
-            };
-            tenants = [...tenants, newTenant];
-            showCreateModal = false;
-            newTenantName = "";
+        try {
+            const fd = new FormData();
+            fd.append("name", newTenantName.trim());
+
+            const res = await fetch(`${API_BASE}/tenants/create`, {
+                method: "POST",
+                body: fd,
+                credentials: "include",
+            });
+
+            if (res.ok) {
+                showCreateModal = false;
+                newTenantName = "";
+                await loadTenants(); // Reload from database
+            } else {
+                console.error("Failed to create tenant");
+            }
+        } catch (error) {
+            console.error("Error creating tenant:", error);
+        } finally {
             isLoading = false;
-        }, 1000);
+        }
     }
 
     function getStatusBadge(status: TenantStatus) {
@@ -74,8 +67,8 @@
 </script>
 
 <RoleGuard
-    requiredRole="system_manager"
-    fallback="Zugriff verweigert: System Manager Berechtigung erforderlich"
+    requiredRole="owner"
+    fallback="Zugriff verweigert: Owner Berechtigung erforderlich"
 >
     <div class="space-y-6">
         <!-- Header -->

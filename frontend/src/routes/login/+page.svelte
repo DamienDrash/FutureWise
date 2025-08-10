@@ -6,7 +6,7 @@
 
   let email = "";
   let password = "";
-  let tenant_id = "alpha";
+  let tenant_id: string | null = null;
   let msg = "";
   let showDemoUsers = false;
 
@@ -17,7 +17,7 @@
     const fd = new FormData();
     fd.append("email", email);
     fd.append("password", password);
-    fd.append("tenant_id", tenant_id);
+    if (tenant_id) fd.append("tenant_id", tenant_id);
     const res = await fetch(`${API}/auth/login`, {
       method: "POST",
       body: fd,
@@ -85,21 +85,7 @@
           />
         </div>
 
-        <div>
-          <label
-            for="tenant"
-            class="block text-sm font-medium text-card-foreground mb-2"
-          >
-            Tenant ID
-          </label>
-          <input
-            id="tenant"
-            class="w-full px-3 py-2 bg-background border border-input rounded-md text-foreground
-                   focus:outline-none focus:ring-2 focus:ring-ring"
-            placeholder="alpha"
-            bind:value={tenant_id}
-          />
-        </div>
+        <!-- Optional Tenant Felder entfernen: Tenant wird vom Server anhand der Zuordnung gewählt -->
 
         <button
           class="w-full px-4 py-2 bg-primary text-primary-foreground rounded-md font-medium

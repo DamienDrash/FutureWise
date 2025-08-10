@@ -5,6 +5,7 @@
   import RecentActivity from "$lib/components/RecentActivity.svelte";
   import RoleGuard from "$lib/components/RoleGuard.svelte";
   import RoleBadge from "$lib/components/RoleBadge.svelte";
+  import AnalyticsChart from "$lib/components/AnalyticsChart.svelte";
   import {
     isSystemManager,
     isTenantAdmin,
@@ -14,79 +15,140 @@
   export let data;
 
   let token = "";
+  let kpiData: any[] = [];
+  let isLoading = true;
+
+  const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 
   onMount(() => {
     if (typeof localStorage !== "undefined") {
       token = localStorage.getItem("fw_token") || "";
     }
+    loadKPIData();
   });
 
   $: userInfo = getUserDisplayInfo(data?.user);
   $: isSystemRole = data?.user && isSystemManager(data.user.role);
   $: isTenantAdminRole = data?.user && isTenantAdmin(data.user.role);
 
-  // Dynamic KPI data based on user role
-  $: kpiData = isSystemRole
-    ? [
-        {
-          title: "Total Tenants",
-          value: "12",
-          change: 20.0,
-          icon: "M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4",
-          color: "chart-1",
-        },
-        {
-          title: "System Users",
-          value: "847",
-          change: 12.3,
-          icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z",
-          color: "chart-2",
-        },
-        {
-          title: "System Revenue",
-          value: "€124.8k",
-          change: 18.5,
-          icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1",
-          color: "chart-3",
-        },
-        {
-          title: "Active Scenarios",
-          value: "234",
-          change: 8.7,
-          icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
-          color: "chart-4",
-        },
-      ]
-    : [
-        {
-          title: "Total Revenue",
-          value: "€2.4M",
-          change: 12.5,
-          icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1",
-          color: "chart-1",
-        },
-        {
-          title: "Active Scenarios",
-          value: "24",
-          change: 8.2,
-          icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
-          color: "chart-2",
-        },
-        {
-          title: "Data Points",
-          value: "45.2k",
-          change: 15.8,
-          icon: "M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
-          color: "chart-3",
-        },
-        {
-          title: "Conversion Rate",
-          value: "3.24%",
-          change: -2.1,
-          icon: "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6",
-          color: "chart-4",
-        },
-      ];
+  async function loadKPIData() {
+    isLoading = true;
+    try {
+      const tenantId = localStorage.getItem("fw_tenant") || "alpha";
+
+      if (isSystemRole) {
+        // Load system-wide KPIs
+        const [tenantsRes, usersRes] = await Promise.all([
+          fetch(`${API_BASE}/tenants`, { credentials: "include" }),
+          fetch(`${API_BASE}/system/stats`, { credentials: "include" }).catch(
+            () => ({ ok: false }),
+          ),
+        ]);
+
+        const tenantsData = tenantsRes.ok
+          ? await tenantsRes.json()
+          : { items: [] };
+        const usersData = usersRes.ok
+          ? await usersRes.json()
+          : { total_users: 0, system_revenue: 0, active_scenarios: 0 };
+
+        kpiData = [
+          {
+            title: "Total Tenants",
+            value: String(tenantsData.items?.length || 0),
+            change: null,
+            icon: "M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4",
+            color: "chart-1",
+          },
+          {
+            title: "System Users",
+            value: String(usersData.total_users || 0),
+            change: null,
+            icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z",
+            color: "chart-2",
+          },
+          {
+            title: "System Revenue",
+            value: `€${((usersData.system_revenue || 0) / 100).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            change: null,
+            icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1",
+            color: "chart-3",
+          },
+          {
+            title: "Active Scenarios",
+            value: String(usersData.active_scenarios || 0),
+            change: null,
+            icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
+            color: "chart-4",
+          },
+        ];
+      } else {
+        // Load tenant-specific KPIs
+        const [summaryRes, scenariosRes] = await Promise.all([
+          fetch(
+            `${API_BASE}/imports/summary?tenant_id=${tenantId}&date_from=${getDateWeekAgo()}&date_to=${getTodayDate()}`,
+            { credentials: "include" },
+          ),
+          fetch(`${API_BASE}/scenarios?tenant_id=${tenantId}`, {
+            credentials: "include",
+          }),
+        ]);
+
+        const summaryData = summaryRes.ok ? await summaryRes.json() : {};
+        const scenariosData = scenariosRes.ok
+          ? await scenariosRes.json()
+          : { items: [] };
+
+        kpiData = [
+          {
+            title: "Total Revenue",
+            value: `€${((summaryData.summary?.revenue_gross_sum || 0) / 100).toLocaleString()}`,
+            change: null,
+            icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1",
+            color: "chart-1",
+          },
+          {
+            title: "Active Scenarios",
+            value: String(scenariosData.items?.length || 0),
+            change: null,
+            icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
+            color: "chart-2",
+          },
+          {
+            title: "Total Orders",
+            value: String(summaryData.summary?.orders_sum || 0),
+            change: null,
+            icon: "M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z",
+            color: "chart-3",
+          },
+          {
+            title: "Total Sessions",
+            value: String(summaryData.summary?.sessions_sum || 0),
+            change: null,
+            icon: "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z",
+            color: "chart-4",
+          },
+        ];
+      }
+    } catch (error) {
+      console.error("Failed to load KPI data:", error);
+      kpiData = [];
+    } finally {
+      isLoading = false;
+    }
+  }
+
+  function getDateWeekAgo() {
+    const date = new Date();
+    date.setDate(date.getDate() - 7);
+    return date.toISOString().split("T")[0];
+  }
+
+  function getTodayDate() {
+    return new Date().toISOString().split("T")[0];
+  }
+
+  // KPI data is now loaded from database via loadKPIData function
 </script>
 
 {#if !token && !data?.user}
@@ -299,14 +361,7 @@
       </div>
     </div>
 
-    <!-- Charts Section Placeholder -->
-    <div class="bg-card border border-border rounded-lg p-6">
-      <h3 class="text-lg font-semibold text-card-foreground mb-4">
-        Analytics Overview
-      </h3>
-      <div class="h-64 bg-muted rounded-lg flex items-center justify-center">
-        <p class="text-muted-foreground">Charts werden hier implementiert</p>
-      </div>
-    </div>
+    <!-- Analytics Chart -->
+    <AnalyticsChart />
   </div>
 {/if}

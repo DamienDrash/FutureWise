@@ -64,19 +64,52 @@ async def register(email: str = Form(...), password: str = Form(...), display_na
 
 
 @router.post("/login")
-async def login(response: Response, email: str = Form(...), password: str = Form(...), tenant_id: str = Form(...)):
+async def login(response: Response, email: str = Form(...), password: str = Form(...), tenant_id: str | None = Form(None)):
     ensure_tables()
     engine = get_sqlalchemy_engine()
     with engine.connect() as conn:
-        row = conn.execute(text("SELECT u.user_id, u.password_hash, COALESCE(ut.role,'viewer') FROM users u LEFT JOIN user_tenants ut ON ut.user_id=u.user_id AND ut.tenant_id=:t WHERE email=:e"), {"e": email, "t": tenant_id}).first()
-        if not row or not pwd.verify(password, row[1]):
+        user = conn.execute(text("SELECT user_id, password_hash FROM users WHERE email=:e"), {"e": email}).first()
+        if not user or not pwd.verify(password, user[1]):
             raise HTTPException(status_code=401, detail="invalid credentials")
-        token = create_token({"sub": str(row[0]), "tenant_id": tenant_id, "role": row[2]})
+
+        # Determine tenant + role
+        selected_tenant = None
+        selected_role = None
+        if tenant_id:
+            r = conn.execute(text("SELECT role FROM user_tenants WHERE user_id=:u AND tenant_id=:t"), {"u": user[0], "t": tenant_id}).first()
+            if not r:
+                raise HTTPException(status_code=403, detail="no access to tenant")
+            selected_tenant = tenant_id
+            selected_role = r[0]
+        else:
+            # pick highest-privilege assignment deterministically
+            row = conn.execute(text(
+                """
+                SELECT tenant_id, role
+                FROM user_tenants
+                WHERE user_id=:u
+                ORDER BY CASE role
+                    WHEN 'owner' THEN 100
+                    WHEN 'system_manager' THEN 90
+                    WHEN 'tenant_admin' THEN 80
+                    WHEN 'manager' THEN 70
+                    WHEN 'analyst' THEN 60
+                    WHEN 'tenant_user' THEN 50
+                    WHEN 'viewer' THEN 40
+                    ELSE 0 END DESC, tenant_id ASC
+                LIMIT 1
+                """
+            ), {"u": user[0]}).first()
+            if not row:
+                raise HTTPException(status_code=403, detail="user has no tenant assignment")
+            selected_tenant = row[0]
+            selected_role = row[1]
+
+        token = create_token({"sub": str(user[0]), "tenant_id": selected_tenant, "role": selected_role})
         csrf = issue_csrf_token()
-        # HttpOnly cookie for token, Non-HttpOnly for CSRF echo
         response.set_cookie("access_token", token, httponly=True, secure=SECURE_COOKIE, samesite="lax", domain=COOKIE_DOMAIN, path="/")
         response.set_cookie("csrf_token", csrf, httponly=False, secure=SECURE_COOKIE, samesite="lax", domain=COOKIE_DOMAIN, path="/")
-        return {"status": "ok"}
+        return {"status": "ok", "tenant_id": selected_tenant, "role": selected_role}
 
 
 @router.post("/logout")
@@ -93,6 +126,23 @@ async def me(request: Request):
         raise HTTPException(status_code=401, detail="not logged in")
     try:
         data = jwt.decode(tok, SECRET, algorithms=[ALGO])
-        return data
+        user_id = data.get("sub")
+        tenant_id = data.get("tenant_id")
+        role = data.get("role", "viewer")
+        
+        # Get additional user info from database
+        engine = get_sqlalchemy_engine()
+        with engine.connect() as conn:
+            user_row = conn.execute(text("SELECT email, display_name FROM users WHERE user_id = :uid"), {"uid": user_id}).first()
+            if user_row:
+                return {
+                    "user_id": user_id, 
+                    "email": user_row[0],
+                    "display_name": user_row[1],
+                    "tenant_id": tenant_id, 
+                    "role": role
+                }
+            else:
+                raise HTTPException(status_code=404, detail="user not found")
     except Exception:
         raise HTTPException(status_code=401, detail="invalid token")

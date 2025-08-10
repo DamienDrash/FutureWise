@@ -13,10 +13,11 @@
 
 {#if hasPermission}
     <slot />
-{:else if fallback}
+{:else}
     <div
         class="text-muted-foreground text-sm p-4 text-center bg-muted/30 rounded-lg"
     >
-        {fallback}
+        {fallback ||
+            `Zugriff verweigert: ${requiredRole} Berechtigung erforderlich`}
     </div>
 {/if}

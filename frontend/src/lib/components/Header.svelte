@@ -110,7 +110,7 @@
             <!-- User Menu -->
             <div class="flex items-center space-x-3">
                 <span class="text-sm text-muted-foreground hidden sm:block">
-                    {user.email}
+                    {user.email || user.display_name || "User"}
                 </span>
                 <button
                     class="px-4 py-2 text-sm font-medium text-foreground bg-background border border-border rounded-md
