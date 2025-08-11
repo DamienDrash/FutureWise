@@ -3,6 +3,8 @@ import os
 import sys
 from textwrap import dedent
 from sqlalchemy import create_engine, text
+from datetime import datetime, timedelta
+import random
 
 
 def get_database_url() -> str:
@@ -23,7 +25,131 @@ def ensure_prerequisites(database_url: str) -> None:
 
 
 def run_migrations_if_any(engine) -> None:
-    pass
+    """Apply SaaS schema extensions"""
+    with engine.begin() as conn:
+        # Create SaaS tables directly
+        try:
+            # Subscription plans
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS subscription_plans (
+                    plan_id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    description TEXT,
+                    price_cents BIGINT NOT NULL,
+                    currency TEXT NOT NULL DEFAULT 'EUR',
+                    max_users INTEGER,
+                    max_data_points INTEGER,
+                    max_scenarios INTEGER,
+                    features JSONB NOT NULL DEFAULT '{}',
+                    is_active BOOLEAN NOT NULL DEFAULT true,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+                )
+            """))
+            
+            # Insert default plans
+            conn.execute(text("""
+                INSERT INTO subscription_plans (plan_id, name, description, price_cents, max_users, max_data_points, max_scenarios, features)
+                VALUES 
+                    ('starter', 'Starter', 'Basic analytics for small businesses', 2900, 5, 100, 3, '["basic_analytics", "csv_import"]'),
+                    ('professional', 'Professional', 'Advanced analytics for growing businesses', 9900, 25, 1000, 20, '["basic_analytics", "csv_import", "api_import", "advanced_charts"]'),
+                    ('enterprise', 'Enterprise', 'Full analytics suite for large organizations', 29900, 100, 10000, 100, '["basic_analytics", "csv_import", "api_import", "advanced_charts", "custom_integrations", "white_label"]')
+                ON CONFLICT (plan_id) DO NOTHING
+            """))
+            
+            # Tenant subscriptions
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS tenant_subscriptions (
+                    subscription_id BIGSERIAL PRIMARY KEY,
+                    tenant_id TEXT NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+                    plan_id TEXT NOT NULL REFERENCES subscription_plans(plan_id),
+                    status TEXT NOT NULL DEFAULT 'active',
+                    started_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                    ends_at TIMESTAMP WITH TIME ZONE,
+                    trial_ends_at TIMESTAMP WITH TIME ZONE,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+                )
+            """))
+            
+            # Invoices
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS invoices (
+                    invoice_id BIGSERIAL PRIMARY KEY,
+                    tenant_id TEXT NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+                    subscription_id BIGINT REFERENCES tenant_subscriptions(subscription_id),
+                    invoice_number TEXT UNIQUE NOT NULL,
+                    amount_cents BIGINT NOT NULL,
+                    tax_cents BIGINT NOT NULL DEFAULT 0,
+                    currency TEXT NOT NULL DEFAULT 'EUR',
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    billing_period_start DATE NOT NULL,
+                    billing_period_end DATE NOT NULL,
+                    due_date DATE NOT NULL,
+                    paid_at TIMESTAMP WITH TIME ZONE,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+                )
+            """))
+            
+            # Usage events
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS usage_events (
+                    event_id BIGSERIAL PRIMARY KEY,
+                    tenant_id TEXT NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+                    user_id BIGINT REFERENCES users(user_id),
+                    event_type TEXT NOT NULL,
+                    event_data JSONB,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+                )
+            """))
+            
+            # Monthly usage
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS monthly_usage (
+                    tenant_id TEXT NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+                    year_month TEXT NOT NULL,
+                    total_logins INTEGER NOT NULL DEFAULT 0,
+                    total_data_imports INTEGER NOT NULL DEFAULT 0,
+                    total_scenarios_run INTEGER NOT NULL DEFAULT 0,
+                    total_api_calls INTEGER NOT NULL DEFAULT 0,
+                    total_data_points INTEGER NOT NULL DEFAULT 0,
+                    active_users INTEGER NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                    PRIMARY KEY (tenant_id, year_month)
+                )
+            """))
+            
+            # Audit events table
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS audit_events (
+                    audit_id BIGSERIAL PRIMARY KEY,
+                    user_id BIGINT REFERENCES users(user_id) ON DELETE SET NULL,
+                    action_type TEXT NOT NULL,
+                    entity_type TEXT NOT NULL,
+                    entity_id TEXT NOT NULL,
+                    details JSONB,
+                    ip_address INET,
+                    user_agent TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+                )
+            """))
+            
+            # Index for audit events
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_audit_events_created_at ON audit_events(created_at DESC)
+            """))
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_audit_events_user_id ON audit_events(user_id)
+            """))
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_audit_events_entity ON audit_events(entity_type, entity_id)
+            """))
+            
+            print("SaaS schema created successfully")
+            
+        except Exception as e:
+            print(f"Schema creation failed: {e}")
+            pass
 
 
 def seed_tenants(engine) -> None:
@@ -290,6 +416,96 @@ def seed_import_events(engine) -> None:
                     })
 
 
+def seed_saas_data(engine) -> None:
+    """Seed SaaS-specific data: subscriptions, billing, usage"""
+    with engine.begin() as conn:
+        # Create tenant subscriptions with different plans
+        subscriptions = [
+            ("alpha", "professional", "active", datetime.now() - timedelta(days=90)),
+            ("beta", "starter", "active", datetime.now() - timedelta(days=45)),
+            ("gamma", "enterprise", "active", datetime.now() - timedelta(days=120)),
+            ("delta", "starter", "active", datetime.now() - timedelta(days=30)),
+            ("epsilon", "professional", "active", datetime.now() - timedelta(days=60)),
+        ]
+        
+        for tenant_id, plan_id, status, started_at in subscriptions:
+            conn.execute(text("""
+                INSERT INTO tenant_subscriptions (tenant_id, plan_id, status, started_at)
+                VALUES (:tenant_id, :plan_id, :status, :started_at)
+                ON CONFLICT DO NOTHING
+            """), {
+                "tenant_id": tenant_id,
+                "plan_id": plan_id, 
+                "status": status,
+                "started_at": started_at
+            })
+        
+        # Generate realistic invoices for the last 6 months
+        plans_pricing = {"starter": 2900, "professional": 9900, "enterprise": 29900}
+        
+        for tenant_id, plan_id, status, started_at in subscriptions:
+            price_cents = plans_pricing[plan_id]
+            
+            # Generate monthly invoices since subscription start
+            current_date = started_at.replace(day=1)  # Start of month
+            while current_date < datetime.now():
+                invoice_number = f"INV-{current_date.strftime('%Y%m')}-{tenant_id.upper()}"
+                billing_end = (current_date + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+                due_date = current_date + timedelta(days=30)
+                
+                # 90% of invoices are paid
+                is_paid = random.random() < 0.9
+                paid_at = current_date + timedelta(days=random.randint(5, 25)) if is_paid else None
+                status_invoice = "paid" if is_paid else "pending"
+                
+                conn.execute(text("""
+                    INSERT INTO invoices (
+                        tenant_id, invoice_number, amount_cents, tax_cents, 
+                        billing_period_start, billing_period_end, due_date, 
+                        status, paid_at, created_at
+                    ) VALUES (
+                        :tenant_id, :invoice_number, :amount_cents, :tax_cents,
+                        :billing_start, :billing_end, :due_date,
+                        :status, :paid_at, :created_at
+                    ) ON CONFLICT (invoice_number) DO NOTHING
+                """), {
+                    "tenant_id": tenant_id,
+                    "invoice_number": invoice_number,
+                    "amount_cents": price_cents,
+                    "tax_cents": int(price_cents * 0.19),  # 19% tax
+                    "billing_start": current_date,
+                    "billing_end": billing_end,
+                    "due_date": due_date,
+                    "status": status_invoice,
+                    "paid_at": paid_at,
+                    "created_at": current_date
+                })
+                
+                current_date = (current_date + timedelta(days=32)).replace(day=1)
+        
+        # Seed some sample audit events
+        sample_audit_events = [
+            (1, "CREATE", "tenant", "alpha", '{"name": "Alpha Corp", "created_by": 1}'),
+            (1, "CREATE", "tenant", "beta", '{"name": "Beta Ltd", "created_by": 1}'),
+            (2, "UPDATE", "user", "3", '{"changes": {"display_name": {"old": "John", "new": "John Doe"}}, "updated_by": 2}'),
+            (1, "CREATE", "subscription", "1", '{"tenant_id": "alpha", "plan_id": "professional", "created_by": 1}'),
+            (1, "DELETE", "user", "999", '{"email": "test@example.com", "deleted_by": 1}'),
+        ]
+        
+        for user_id, action_type, entity_type, entity_id, details in sample_audit_events:
+            conn.execute(text("""
+                INSERT INTO audit_events (user_id, action_type, entity_type, entity_id, details)
+                VALUES (:user_id, :action_type, :entity_type, :entity_id, :details)
+                ON CONFLICT DO NOTHING
+            """), {
+                "user_id": user_id,
+                "action_type": action_type,
+                "entity_type": entity_type,
+                "entity_id": entity_id,
+                "details": details
+            })
+
+
 def main() -> None:
     database_url = get_database_url()
     ensure_prerequisites(database_url)
@@ -310,8 +526,11 @@ def main() -> None:
     
     print("Seeding Import-Events...")
     seed_import_events(engine)
-
-    print("Seeding abgeschlossen. Realistische Testdaten wurden geladen.")
+    
+    print("Seeding SaaS-Daten...")
+    seed_saas_data(engine)
+    
+    print("Seeding abgeschlossen. Realistische SaaS-Testdaten wurden geladen.")
 
 
 if __name__ == "__main__":

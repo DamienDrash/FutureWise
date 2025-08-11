@@ -9,6 +9,7 @@
   import {
     isSystemManager,
     isTenantAdmin,
+    isOwner,
     getUserDisplayInfo,
   } from "$lib/stores/auth";
 
@@ -17,6 +18,7 @@
   let token = "";
   let kpiData: any[] = [];
   let isLoading = true;
+  let ownerSaasData: any = null;
 
   const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 
@@ -28,12 +30,66 @@
   });
 
   $: userInfo = getUserDisplayInfo(data?.user);
+  $: isOwnerRole = data?.user && isOwner(data.user.role);
   $: isSystemRole = data?.user && isSystemManager(data.user.role);
   $: isTenantAdminRole = data?.user && isTenantAdmin(data.user.role);
 
   async function loadKPIData() {
     isLoading = true;
     try {
+      // Owner sieht das SaaS Overview Dashboard direkt auf der Hauptseite
+      if (isOwnerRole) {
+        // Load SaaS metrics for owner
+        const [metricsRes, revenueRes] = await Promise.all([
+          fetch(`${API_BASE}/owner/saas-metrics`, { credentials: "include" }),
+          fetch(`${API_BASE}/owner/revenue`, { credentials: "include" }),
+        ]);
+
+        if (metricsRes.ok && revenueRes.ok) {
+          const saasData = await metricsRes.json();
+          const revenueData = await revenueRes.json();
+
+          kpiData = [
+            {
+              title: "Monthly Recurring Revenue",
+              value: `€${(saasData.current_metrics.mrr_cents / 100).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              change: null,
+              icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1",
+              color: "chart-1",
+            },
+            {
+              title: "Annual Recurring Revenue",
+              value: `€${(saasData.current_metrics.arr_cents / 100).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              change: null,
+              icon: "M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z",
+              color: "chart-2",
+            },
+            {
+              title: "Aktive Tenants",
+              value: `${saasData.current_metrics.active_tenants}`,
+              change: null,
+              icon: "M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4",
+              color: "chart-3",
+            },
+            {
+              title: "Total Users",
+              value: `${saasData.current_metrics.total_users}`,
+              change: null,
+              icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z",
+              color: "chart-4",
+            },
+          ];
+
+          // Store additional SaaS data for display
+          ownerSaasData = {
+            metrics: saasData,
+            revenue: revenueData,
+          };
+        }
+        isLoading = false;
+        return;
+      }
+
       const tenantId = localStorage.getItem("fw_tenant") || "alpha";
 
       if (isSystemRole) {
@@ -355,13 +411,123 @@
         <QuickActions user={data?.user} />
       </div>
 
-      <!-- Recent Activity -->
+      <!-- Recent Activity für non-owners oder SaaS Overview für Owner -->
       <div class="lg:col-span-2">
-        <RecentActivity />
+        {#if isOwnerRole && ownerSaasData}
+          <!-- Owner SaaS Overview -->
+          <div class="space-y-6">
+            <!-- Plan Distribution -->
+            {#if ownerSaasData.metrics?.plan_distribution}
+              <div class="bg-card border border-border rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-foreground mb-4">
+                  Plan-Verteilung
+                </h3>
+                <div class="space-y-3">
+                  {#each ownerSaasData.metrics.plan_distribution as plan}
+                    {@const percentage =
+                      ownerSaasData.metrics.current_metrics.mrr_cents > 0
+                        ? (plan.total_mrr_cents /
+                            ownerSaasData.metrics.current_metrics.mrr_cents) *
+                          100
+                        : 0}
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center gap-3">
+                        <div
+                          class="w-4 h-4 rounded {plan.plan_name ===
+                          'Enterprise'
+                            ? 'bg-purple-500'
+                            : plan.plan_name === 'Professional'
+                              ? 'bg-blue-500'
+                              : 'bg-green-500'}"
+                        ></div>
+                        <span class="font-medium text-foreground"
+                          >{plan.plan_name}</span
+                        >
+                      </div>
+                      <div class="text-right">
+                        <div class="font-medium text-foreground">
+                          €{(plan.total_mrr_cents / 100).toLocaleString(
+                            "de-DE",
+                            {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            },
+                          )}
+                        </div>
+                        <div class="text-sm text-muted-foreground">
+                          {percentage.toFixed(1)}%
+                        </div>
+                      </div>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        class="h-2 rounded-full {plan.plan_name === 'Enterprise'
+                          ? 'bg-purple-500'
+                          : plan.plan_name === 'Professional'
+                            ? 'bg-blue-500'
+                            : 'bg-green-500'}"
+                        style="width: {percentage}%"
+                      ></div>
+                    </div>
+                  {/each}
+                </div>
+              </div>
+            {/if}
+
+            <!-- Revenue Trend Overview -->
+            {#if ownerSaasData.revenue?.monthly_trend}
+              <div class="bg-card border border-border rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-foreground mb-4">
+                  Revenue Trend (Letzte 6 Monate)
+                </h3>
+                <div class="overflow-x-auto">
+                  <table class="w-full border-collapse">
+                    <thead>
+                      <tr class="border-b border-border">
+                        <th
+                          class="text-left py-3 px-4 font-medium text-foreground"
+                          >Monat</th
+                        >
+                        <th
+                          class="text-left py-3 px-4 font-medium text-foreground"
+                          >Paid Revenue</th
+                        >
+                        <th
+                          class="text-left py-3 px-4 font-medium text-foreground"
+                          >Paying Tenants</th
+                        >
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {#each ownerSaasData.revenue.monthly_trend.slice(-6) as month}
+                        <tr class="border-b border-border hover:bg-muted/50">
+                          <td class="py-3 px-4 font-medium text-foreground"
+                            >{month.month}</td
+                          >
+                          <td class="py-3 px-4 text-foreground">
+                            €{(month.paid_revenue / 100).toLocaleString(
+                              "de-DE",
+                              {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              },
+                            )}
+                          </td>
+                          <td class="py-3 px-4 text-foreground"
+                            >{month.paying_tenants}</td
+                          >
+                        </tr>
+                      {/each}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            {/if}
+          </div>
+        {:else}
+          <RecentActivity />
+        {/if}
       </div>
     </div>
-
-    <!-- Analytics Chart -->
-    <AnalyticsChart />
   </div>
 {/if}

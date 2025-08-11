@@ -12,35 +12,49 @@
         activeScenarios: 0,
     };
 
-    let recentSystemActivity = [
-        {
-            type: "tenant_created",
-            message: 'Neuer Tenant "gamma" erstellt',
-            timestamp: "2 Stunden her",
-            user: "admin@futurewise.local",
-        },
-        {
-            type: "user_registered",
-            message: "Neuer Benutzer registriert: john@company.com",
-            timestamp: "4 Stunden her",
-            tenant: "alpha",
-        },
-        {
-            type: "system_update",
-            message: "System-Update auf Version 2.1.0 deployed",
-            timestamp: "1 Tag her",
-            user: "system",
-        },
-    ];
+    let recentSystemActivity: any[] = [];
+    let loading = true;
+    let error = "";
 
-    onMount(() => {
-        // In real implementation, fetch from API
-        systemStats = {
-            totalUsers: 847,
-            totalTenants: 12,
-            systemRevenue: 124800,
-            activeScenarios: 234,
-        };
+    const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+
+    onMount(async () => {
+        try {
+            // Load real system stats from backend
+            const statsRes = await fetch(`${API_BASE}/system/stats`, {
+                credentials: "include",
+            });
+
+            if (statsRes.ok) {
+                const stats = await statsRes.json();
+                systemStats = {
+                    totalUsers: stats.total_users || 0,
+                    totalTenants: stats.total_tenants || 0,
+                    systemRevenue: stats.system_revenue || 0,
+                    activeScenarios: stats.active_scenarios || 0,
+                };
+            }
+
+            // Load recent audit events as system activity
+            const auditRes = await fetch(`${API_BASE}/owner/audit-log?limit=5`, {
+                credentials: "include",
+            });
+
+            if (auditRes.ok) {
+                const auditData = await auditRes.json();
+                recentSystemActivity = (auditData.audit_entries || []).map((entry: any) => ({
+                    type: entry.action_type.toLowerCase(),
+                    message: `${entry.action_type} ${entry.entity_type} (ID: ${entry.entity_id})`,
+                    timestamp: new Date(entry.created_at).toLocaleString("de-DE"),
+                    user: entry.user_email || "System",
+                }));
+            }
+        } catch (err) {
+            console.error("Failed to load system data:", err);
+            error = "Fehler beim Laden der Systemdaten";
+        } finally {
+            loading = false;
+        }
     });
 </script>
 
