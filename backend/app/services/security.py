@@ -8,9 +8,15 @@ ALGO = os.getenv("JWT_ALGO", "HS256")
 SECRET = os.getenv("JWT_SECRET", "dev-change-me")
 
 ROLE_LEVEL = {
+    # Legacy / existing roles
     "viewer": 1,
     "analyst": 2,
     "manager": 3,
+    # New explicit SaaS roles
+    "tenant_user": 1,
+    "tenant_admin": 3,
+    "system_manager": 4,
+    "owner": 5,
 }
 
 class AuthContext:

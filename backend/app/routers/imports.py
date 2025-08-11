@@ -338,6 +338,28 @@ async def import_summary(
         return {"tenant_id": tenant_id, "range": {"from": str(date_from), "to": str(date_to)}, "summary": dict(res) if res else {}}
 
 
+@router.get("/daily")
+async def import_daily(
+    tenant_id: str = Query(...),
+    date_from: date = Query(...),
+    date_to: date = Query(...),
+):
+    engine = get_sqlalchemy_engine()
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT date, sessions, orders, revenue_cents_gross, revenue_cents_net, conversion_rate
+                FROM kpi_daily
+                WHERE tenant_id = :tid AND date BETWEEN :df AND :dt
+                ORDER BY date ASC
+                """
+            ),
+            {"tid": tenant_id, "df": date_from, "dt": date_to},
+        ).mappings().all()
+        return {"items": [dict(r) for r in rows]}
+
+
 @router.post("/validate", response_model=ValidationResponse, summary="Validate import file without inserting")
 async def validate_import(tenant_id: str = Form(...), file: UploadFile = File(...), ctx: AuthContext = Depends(require_role("analyst"))):
     if ctx.tenant_id != tenant_id:

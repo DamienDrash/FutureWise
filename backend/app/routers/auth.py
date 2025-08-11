@@ -64,14 +64,42 @@ async def register(email: str = Form(...), password: str = Form(...), display_na
 
 
 @router.post("/login")
-async def login(response: Response, email: str = Form(...), password: str = Form(...), tenant_id: str = Form(...)):
+async def login(response: Response, email: str = Form(...), password: str = Form(...)):
     ensure_tables()
     engine = get_sqlalchemy_engine()
     with engine.connect() as conn:
-        row = conn.execute(text("SELECT u.user_id, u.password_hash, COALESCE(ut.role,'viewer') FROM users u LEFT JOIN user_tenants ut ON ut.user_id=u.user_id AND ut.tenant_id=:t WHERE email=:e"), {"e": email, "t": tenant_id}).first()
-        if not row or not pwd.verify(password, row[1]):
+        # First check if user exists and password is correct
+        user_row = conn.execute(text("SELECT user_id, password_hash FROM users WHERE email=:e"), {"e": email}).first()
+        if not user_row or not pwd.verify(password, user_row[1]):
             raise HTTPException(status_code=401, detail="invalid credentials")
-        token = create_token({"sub": str(row[0]), "tenant_id": tenant_id, "role": row[2]})
+        
+        user_id = user_row[0]
+        
+        # Get the user's primary tenant and role (highest role if multiple tenants)
+        tenant_row = conn.execute(text("""
+            SELECT ut.tenant_id, ut.role 
+            FROM user_tenants ut 
+            WHERE ut.user_id = :u 
+            ORDER BY 
+                CASE ut.role 
+                    WHEN 'owner' THEN 7
+                    WHEN 'system_manager' THEN 6  
+                    WHEN 'tenant_admin' THEN 5
+                    WHEN 'manager' THEN 4
+                    WHEN 'tenant_user' THEN 3
+                    WHEN 'analyst' THEN 2
+                    WHEN 'viewer' THEN 1
+                    ELSE 0
+                END DESC
+            LIMIT 1
+        """), {"u": user_id}).first()
+        
+        if not tenant_row:
+            raise HTTPException(status_code=401, detail="user has no tenant access")
+        
+        tenant_id, role = tenant_row
+        
+        token = create_token({"sub": str(user_id), "tenant_id": tenant_id, "role": role})
         csrf = issue_csrf_token()
         # HttpOnly cookie for token, Non-HttpOnly for CSRF echo
         response.set_cookie("access_token", token, httponly=True, secure=SECURE_COOKIE, samesite="lax", domain=COOKIE_DOMAIN, path="/")
@@ -93,6 +121,23 @@ async def me(request: Request):
         raise HTTPException(status_code=401, detail="not logged in")
     try:
         data = jwt.decode(tok, SECRET, algorithms=[ALGO])
-        return data
+        user_id = data.get("sub")
+        tenant_id = data.get("tenant_id")
+        role = data.get("role", "viewer")
+        
+        # Get additional user info from database
+        engine = get_sqlalchemy_engine()
+        with engine.connect() as conn:
+            user_row = conn.execute(text("SELECT email, display_name FROM users WHERE user_id = :uid"), {"uid": user_id}).first()
+            if user_row:
+                return {
+                    "user_id": user_id, 
+                    "email": user_row[0],
+                    "display_name": user_row[1],
+                    "tenant_id": tenant_id, 
+                    "role": role
+                }
+            else:
+                raise HTTPException(status_code=404, detail="user not found")
     except Exception:
         raise HTTPException(status_code=401, detail="invalid token")

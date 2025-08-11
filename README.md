@@ -20,6 +20,15 @@ Empfohlen im Backend-Container ausführen (stellt sicher, dass alle Python-Depen
 
 ```
 make seed
+Demo-Logins (Passwort überall: `secret`):
+
+- Owner (plattformweit): `owner@futurewise.local`
+- System Manager: `sysman@futurewise.local`
+- Tenant Admin (alpha): `alpha.admin@futurewise.local`
+- Tenant Admin (beta): `beta.admin@futurewise.local`
+- Tenant User (alpha): `alpha.user@futurewise.local`
+- Tenant User (beta): `beta.user@futurewise.local`
+
 ```
 
 ## Import-Flows testen (API / CSV / XLS / Webhook)
