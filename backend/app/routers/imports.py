@@ -324,7 +324,7 @@ async def import_summary(
             text(
                 """
                 SELECT 
-                  COUNT(*) FILTER (WHERE date BETWEEN :df AND :dt) AS num_days,
+                  COUNT(*) AS num_days,
                   COALESCE(SUM(sessions),0) AS sessions_sum,
                   COALESCE(SUM(orders),0) AS orders_sum,
                   COALESCE(SUM(revenue_cents_gross),0) AS revenue_gross_sum,

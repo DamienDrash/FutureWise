@@ -64,52 +64,47 @@ async def register(email: str = Form(...), password: str = Form(...), display_na
 
 
 @router.post("/login")
-async def login(response: Response, email: str = Form(...), password: str = Form(...), tenant_id: str | None = Form(None)):
+async def login(response: Response, email: str = Form(...), password: str = Form(...)):
     ensure_tables()
     engine = get_sqlalchemy_engine()
     with engine.connect() as conn:
-        user = conn.execute(text("SELECT user_id, password_hash FROM users WHERE email=:e"), {"e": email}).first()
-        if not user or not pwd.verify(password, user[1]):
+        # First check if user exists and password is correct
+        user_row = conn.execute(text("SELECT user_id, password_hash FROM users WHERE email=:e"), {"e": email}).first()
+        if not user_row or not pwd.verify(password, user_row[1]):
             raise HTTPException(status_code=401, detail="invalid credentials")
-
-        # Determine tenant + role
-        selected_tenant = None
-        selected_role = None
-        if tenant_id:
-            r = conn.execute(text("SELECT role FROM user_tenants WHERE user_id=:u AND tenant_id=:t"), {"u": user[0], "t": tenant_id}).first()
-            if not r:
-                raise HTTPException(status_code=403, detail="no access to tenant")
-            selected_tenant = tenant_id
-            selected_role = r[0]
-        else:
-            # pick highest-privilege assignment deterministically
-            row = conn.execute(text(
-                """
-                SELECT tenant_id, role
-                FROM user_tenants
-                WHERE user_id=:u
-                ORDER BY CASE role
-                    WHEN 'owner' THEN 100
-                    WHEN 'system_manager' THEN 90
-                    WHEN 'tenant_admin' THEN 80
-                    WHEN 'manager' THEN 70
-                    WHEN 'analyst' THEN 60
-                    WHEN 'tenant_user' THEN 50
-                    WHEN 'viewer' THEN 40
-                    ELSE 0 END DESC, tenant_id ASC
-                LIMIT 1
-                """
-            ), {"u": user[0]}).first()
-            if not row:
-                raise HTTPException(status_code=403, detail="user has no tenant assignment")
-            selected_tenant = row[0]
-            selected_role = row[1]
-
-        token = create_token({"sub": str(user[0]), "tenant_id": selected_tenant, "role": selected_role})
+        
+        user_id = user_row[0]
+        
+        # Get the user's primary tenant and role (highest role if multiple tenants)
+        tenant_row = conn.execute(text("""
+            SELECT ut.tenant_id, ut.role 
+            FROM user_tenants ut 
+            WHERE ut.user_id = :u 
+            ORDER BY 
+                CASE ut.role 
+                    WHEN 'owner' THEN 7
+                    WHEN 'system_manager' THEN 6  
+                    WHEN 'tenant_admin' THEN 5
+                    WHEN 'manager' THEN 4
+                    WHEN 'tenant_user' THEN 3
+                    WHEN 'analyst' THEN 2
+                    WHEN 'viewer' THEN 1
+                    ELSE 0
+                END DESC
+            LIMIT 1
+        """), {"u": user_id}).first()
+        
+        if not tenant_row:
+            raise HTTPException(status_code=401, detail="user has no tenant access")
+        
+        tenant_id, role = tenant_row
+        
+        token = create_token({"sub": str(user_id), "tenant_id": tenant_id, "role": role})
         csrf = issue_csrf_token()
+        # HttpOnly cookie for token, Non-HttpOnly for CSRF echo
         response.set_cookie("access_token", token, httponly=True, secure=SECURE_COOKIE, samesite="lax", domain=COOKIE_DOMAIN, path="/")
         response.set_cookie("csrf_token", csrf, httponly=False, secure=SECURE_COOKIE, samesite="lax", domain=COOKIE_DOMAIN, path="/")
-        return {"status": "ok", "tenant_id": selected_tenant, "role": selected_role}
+        return {"status": "ok"}
 
 
 @router.post("/logout")

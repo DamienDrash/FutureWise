@@ -6,7 +6,7 @@
 
   let email = "";
   let password = "";
-  let tenant_id: string | null = null;
+  let tenant_id = "alpha";
   let msg = "";
   let showDemoUsers = false;
 
@@ -17,7 +17,6 @@
     const fd = new FormData();
     fd.append("email", email);
     fd.append("password", password);
-    if (tenant_id) fd.append("tenant_id", tenant_id);
     const res = await fetch(`${API}/auth/login`, {
       method: "POST",
       body: fd,
@@ -25,7 +24,6 @@
     });
     const t = await res.json();
     if (res.ok) {
-      localStorage.setItem("fw_tenant", tenant_id);
       location.href = "/";
     } else {
       msg = t.detail || "Login fehlgeschlagen";
@@ -35,7 +33,6 @@
   function loginAsDemo(demoUser: any) {
     email = demoUser.email;
     password = demoUser.password;
-    tenant_id = demoUser.tenant_id;
     submit();
   }
 
@@ -84,8 +81,6 @@
             bind:value={password}
           />
         </div>
-
-        <!-- Optional Tenant Felder entfernen: Tenant wird vom Server anhand der Zuordnung gewählt -->
 
         <button
           class="w-full px-4 py-2 bg-primary text-primary-foreground rounded-md font-medium
@@ -143,7 +138,9 @@
                   Tenant: {demoUser.tenant_id} • Passwort: {demoUser.password}
                 </div>
               </div>
-              <div class="text-xs text-muted-foreground mt-2">{labelFor(demoUser.role)}</div>
+              <div class="text-xs text-muted-foreground mt-2">
+                {labelFor(demoUser.role)}
+              </div>
             </button>
           {/each}
         </div>
